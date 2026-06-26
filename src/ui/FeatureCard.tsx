@@ -1,8 +1,13 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { FeatureInfo } from '../core/types'
 import type { FeatureSample } from '../samples'
 import { Preview } from '../render/Preview'
 import { LoclPreview } from '../render/LoclPreview'
+import { AffectedGlyphs } from './AffectedGlyphs'
+
+// Above this many affected glyphs the word sample can't show them all, so offer
+// the full inventory.
+const GLYPH_INVENTORY_THRESHOLD = 12
 
 const SCRIPT_LABELS: Record<string, string> = {
   latn: 'Latin',
@@ -46,6 +51,7 @@ export function FeatureCard({
   size?: number
 }) {
   const kinds = feature.gsubLookupTypes.map((t) => LOOKUP_KIND[t] ?? `type ${t}`)
+  const [showAll, setShowAll] = useState(false)
 
   return (
     <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900/30">
@@ -107,6 +113,25 @@ export function FeatureCard({
                 ? 'component sequences (no word contains them)'
                 : 'covered glyphs (no readable word contains them)'}
             </div>
+          )}
+          {sample.affected.length > GLYPH_INVENTORY_THRESHOLD && (
+            <>
+              <button
+                onClick={() => setShowAll((v) => !v)}
+                className="mt-2 text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+              >
+                {showAll ? 'Hide' : `Show all ${sample.affected.length} affected glyphs`}
+              </button>
+              {showAll && (
+                <AffectedGlyphs
+                  cssFamily={cssFamily}
+                  tag={feature.tag}
+                  defaultOn={feature.defaultOn}
+                  affected={sample.affected}
+                  size={size}
+                />
+              )}
+            </>
           )}
         </div>
       )}

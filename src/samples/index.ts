@@ -25,11 +25,17 @@ export type FeatureSample =
       usedCoverage: boolean
       /** Affected characters / ligature sequences to highlight in the sample. */
       highlight?: string[]
+      /** Full set of affected chars (single) / sequences (ligature) for the inventory. */
+      affected: string[]
     }
   | { tag: string; kind: 'locl'; languages: LoclLanguageSample[] }
 
 const LIGATURE_TAGS = new Set(['liga', 'dlig', 'clig', 'hlig', 'rlig'])
 const SKIP_FOR_SINGLE = new Set(['locl', 'aalt', 'ccmp'])
+
+// Above this many affected glyphs, highlighting marks (almost) everything and
+// stops being useful (e.g. small caps over the whole alphabet) — so we skip it.
+const MAX_HIGHLIGHT_GLYPHS = 12
 
 // Figure features whose input glyphs are often alternate (non-cmapped) forms, so
 // we always proof them on a fixed numeric template rather than discovered chars.
@@ -131,7 +137,7 @@ async function buildLoclSample(
       bcp47: info?.bcp47,
       text,
       usedCoverage,
-      highlight: usedCoverage ? undefined : chars,
+      highlight: !usedCoverage && chars.length <= MAX_HIGHLIGHT_GLYPHS ? chars : undefined,
     })
   }
   if (languages.length === 0) return null
@@ -199,19 +205,30 @@ export async function prepareSamples(
         kind: 'ligature',
         text,
         usedCoverage,
+        // ligatures are many→one — the components stand out, always worth marking
         highlight: usedCoverage ? undefined : item.sequences,
+        affected: item.sequences,
       })
     } else if (item.text !== undefined) {
       // figure template — the whole sample is affected, nothing specific to mark
-      result.set(item.tag, { tag: item.tag, kind: 'single', text: item.text, usedCoverage: false })
+      result.set(item.tag, {
+        tag: item.tag,
+        kind: 'single',
+        text: item.text,
+        usedCoverage: false,
+        affected: [],
+      })
     } else {
-      const { text, usedCoverage } = pickSample(item.chars!, bank)
+      const chars = item.chars!
+      const { text, usedCoverage } = pickSample(chars, bank)
       result.set(item.tag, {
         tag: item.tag,
         kind: 'single',
         text,
         usedCoverage,
-        highlight: usedCoverage ? undefined : item.chars,
+        // 1:1 subs: mark only when they touch few glyphs (cv01/locl), not whole alphabets
+        highlight: !usedCoverage && chars.length <= MAX_HIGHLIGHT_GLYPHS ? chars : undefined,
+        affected: chars,
       })
     }
   }
