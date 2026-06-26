@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { loadFont } from './core/load'
 import { analyzeFeatures } from './core/introspect'
+import { buildReverseCmap } from './core/glyphs'
+import { findCombinations } from './core/combinations'
 import { prepareSamples, type FeatureSample } from './samples'
 import type { LoadedFont } from './core/types'
 import { DropZone } from './ui/DropZone'
 import { Header } from './ui/Header'
 import { FeatureList } from './ui/FeatureList'
+import { CombinationExplorer } from './ui/CombinationExplorer'
 import { Controls } from './ui/Controls'
 
 type Theme = 'light' | 'dark'
@@ -84,6 +87,10 @@ function Loaded({
   onToggleTheme: () => void
 }) {
   const features = useMemo(() => analyzeFeatures(loaded.font), [loaded])
+  const combinations = useMemo(
+    () => findCombinations(loaded.font, features, buildReverseCmap(loaded.font)),
+    [loaded, features],
+  )
   const [samples, setSamples] = useState<Map<string, FeatureSample>>(new Map())
   const [size, setSize] = useState(30)
 
@@ -109,6 +116,7 @@ function Loaded({
         </div>
       </div>
       <Controls size={size} onSize={setSize} theme={theme} onToggleTheme={onToggleTheme} />
+      <CombinationExplorer groups={combinations} cssFamily={loaded.cssFamily} size={Math.max(size, 36)} />
       <FeatureList features={features} samples={samples} cssFamily={loaded.cssFamily} size={size} />
     </div>
   )

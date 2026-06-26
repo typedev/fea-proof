@@ -1,0 +1,99 @@
+import { useState, type CSSProperties } from 'react'
+import type { CombinationGroup, FeatureToggle } from '../core/combinations'
+
+function buildSettings(features: FeatureToggle[], active: Set<string>): string {
+  const parts: string[] = []
+  for (const f of features) {
+    if (active.has(f.tag)) parts.push(`"${f.tag}" 1`)
+    else if (f.defaultOn) parts.push(`"${f.tag}" 0`)
+  }
+  return parts.length ? parts.join(', ') : 'normal'
+}
+
+function CombinationCard({
+  group,
+  cssFamily,
+  size,
+}: {
+  group: CombinationGroup
+  cssFamily: string
+  size: number
+}) {
+  const [active, setActive] = useState<Set<string>>(new Set())
+
+  const toggle = (tag: string) =>
+    setActive((prev) => {
+      const next = new Set(prev)
+      if (next.has(tag)) next.delete(tag)
+      else next.add(tag)
+      return next
+    })
+
+  const style: CSSProperties = {
+    fontFamily: `"${cssFamily}", system-ui`,
+    fontSize: size,
+    lineHeight: 1.3,
+    fontFeatureSettings: buildSettings(group.features, active),
+  }
+
+  return (
+    <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900/30">
+      <div className="mb-3 flex flex-wrap items-center gap-1.5">
+        <button
+          onClick={() => setActive(new Set())}
+          className={`rounded px-2 py-1 text-xs font-medium ${
+            active.size === 0
+              ? 'bg-indigo-600 text-white'
+              : 'bg-neutral-200 text-neutral-600 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
+          }`}
+        >
+          plain
+        </button>
+        {group.features.map((f) => (
+          <button
+            key={f.tag}
+            onClick={() => toggle(f.tag)}
+            title={f.name}
+            className={`rounded px-2 py-1 font-mono text-xs font-medium ${
+              active.has(f.tag)
+                ? 'bg-indigo-600 text-white'
+                : 'bg-neutral-200 text-neutral-600 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
+            }`}
+          >
+            {f.tag}
+          </button>
+        ))}
+      </div>
+      <div style={style} className="break-words text-neutral-900 dark:text-neutral-100">
+        {group.chars.join(' ')}
+      </div>
+    </div>
+  )
+}
+
+export function CombinationExplorer({
+  groups,
+  cssFamily,
+  size = 40,
+}: {
+  groups: CombinationGroup[]
+  cssFamily: string
+  size?: number
+}) {
+  if (groups.length === 0) return null
+
+  return (
+    <div className="space-y-3">
+      <div className="px-1">
+        <h2 className="text-lg font-semibold">Feature combinations</h2>
+        <p className="text-sm text-neutral-500">
+          Glyphs touched by several features — toggle features (applied in the font's
+          LookupList order) to see how they stack.
+        </p>
+      </div>
+      {groups.map((g, i) => (
+        <CombinationCard key={i} group={g} cssFamily={cssFamily} size={size} />
+      ))}
+    </div>
+  )
+}
