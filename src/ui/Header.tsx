@@ -12,7 +12,7 @@ const SCRIPT_LABELS: Record<string, string> = {
 
 export function Header({ loaded }: { loaded: LoadedFont }) {
   return (
-    <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6">
+    <div className="rounded-2xl border border-neutral-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-900/40">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1
           className="text-3xl font-semibold"
@@ -46,7 +46,7 @@ function Meta({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <dt className="text-xs uppercase tracking-wide text-neutral-500">{label}</dt>
-      <dd className="truncate text-neutral-200" title={value}>
+      <dd className="truncate text-neutral-700 dark:text-neutral-200" title={value}>
         {value}
       </dd>
     </div>

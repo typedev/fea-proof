@@ -25,10 +25,11 @@ type Tone = 'neutral' | 'on' | 'off' | 'muted'
 
 function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: Tone }) {
   const tones: Record<Tone, string> = {
-    neutral: 'bg-neutral-800 text-neutral-300',
-    on: 'bg-emerald-900/50 text-emerald-300',
-    off: 'bg-neutral-800 text-neutral-400',
-    muted: 'bg-neutral-900 text-neutral-500 border border-neutral-800',
+    neutral: 'bg-neutral-200 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300',
+    on: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300',
+    off: 'bg-neutral-200 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400',
+    muted:
+      'border border-neutral-200 bg-neutral-100 text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-500',
   }
   return <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${tones[tone]}`}>{children}</span>
 }
@@ -38,31 +39,28 @@ export function FeatureCard({
   sample,
   cssFamily,
   size = 30,
-  customText = '',
 }: {
   feature: FeatureInfo
   sample?: FeatureSample
   cssFamily: string
   size?: number
-  customText?: string
 }) {
   const kinds = feature.gsubLookupTypes.map((t) => LOOKUP_KIND[t] ?? `type ${t}`)
-  const override = customText.trim()
 
   return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-900/30 p-4">
+    <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900/30">
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-baseline gap-3">
-          <code className="shrink-0 rounded bg-neutral-800 px-1.5 py-0.5 font-mono text-sm text-indigo-300">
+          <code className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-sm text-indigo-600 dark:bg-neutral-800 dark:text-indigo-300">
             {feature.tag}
           </code>
           <div className="min-w-0">
-            <div className="text-sm text-neutral-200">{feature.name}</div>
+            <div className="text-sm text-neutral-800 dark:text-neutral-200">{feature.name}</div>
             {(feature.scripts.length > 0 || feature.langs.length > 0) && (
               <div className="mt-0.5 text-xs text-neutral-500">
                 {feature.scripts.map((s) => SCRIPT_LABELS[s] ?? s).join(', ')}
                 {feature.langs.length > 0 && (
-                  <span className="text-neutral-600"> · langs: {feature.langs.join(', ')}</span>
+                  <span className="text-neutral-400 dark:text-neutral-600"> · langs: {feature.langs.join(', ')}</span>
                 )}
               </div>
             )}
@@ -88,28 +86,23 @@ export function FeatureCard({
       </div>
 
       {!sample ? (
-        <div className="mt-3 text-xs text-neutral-600">{noPreviewReason(feature)}</div>
+        <div className="mt-3 text-xs text-neutral-400 dark:text-neutral-600">{noPreviewReason(feature)}</div>
       ) : sample.kind === 'locl' ? (
         <div className="mt-3">
-          <LoclPreview
-            cssFamily={cssFamily}
-            languages={sample.languages}
-            size={size}
-            overrideText={override || undefined}
-          />
+          <LoclPreview cssFamily={cssFamily} languages={sample.languages} size={size} />
         </div>
       ) : (
         <div className="mt-3">
           <Preview
             cssFamily={cssFamily}
-            text={override || sample.text}
+            text={sample.text}
             tag={feature.tag}
             defaultOn={feature.defaultOn}
             size={size}
             highlight={sample.highlight}
           />
-          {!override && sample.usedCoverage && (
-            <div className="mt-1.5 text-[11px] text-neutral-600">
+          {sample.usedCoverage && (
+            <div className="mt-1.5 text-[11px] text-neutral-400 dark:text-neutral-600">
               {sample.kind === 'ligature'
                 ? 'component sequences (no word contains them)'
                 : 'covered glyphs (no readable word contains them)'}
@@ -124,7 +117,6 @@ export function FeatureCard({
 function noPreviewReason(feature: FeatureInfo): string {
   if (feature.ignored) return 'ignored feature'
   if (!feature.tables.includes('GSUB')) return 'positioning feature — no glyph substitution to preview'
-  if (feature.tag === 'locl') return 'localized forms — per-language preview coming next'
   if (feature.tag === 'aalt') return 'access all alternates — alternates grid coming later'
   if (feature.tag === 'ccmp') return 'glyph composition/decomposition — usually invisible'
   return 'no single-substitution preview available'

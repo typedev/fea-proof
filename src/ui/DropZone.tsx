@@ -43,7 +43,7 @@ export function DropZone({ onFile, busy, compact }: Props) {
         compact ? 'gap-1 p-6' : 'gap-3 p-16',
         drag
           ? 'border-indigo-400 bg-indigo-500/10'
-          : 'border-neutral-700 bg-neutral-900/40 hover:border-neutral-500',
+          : 'border-neutral-300 bg-neutral-100/60 hover:border-neutral-400 dark:border-neutral-700 dark:bg-neutral-900/40 dark:hover:border-neutral-500',
       ].join(' ')}
     >
       <input
@@ -57,7 +57,7 @@ export function DropZone({ onFile, busy, compact }: Props) {
         {busy ? 'Reading font…' : 'Drop a font here'}
       </div>
       {!compact && (
-        <div className="text-sm text-neutral-400">
+        <div className="text-sm text-neutral-500 dark:text-neutral-400">
           or click to choose · .otf .ttf .woff .woff2 · processed locally, never uploaded
         </div>
       )}

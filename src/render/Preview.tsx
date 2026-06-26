@@ -25,7 +25,7 @@ export function Preview({ cssFamily, text, tag, defaultOn, size = 30, lang, labe
   const finalLabels = labels ?? defaultLabels
 
   return (
-    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-neutral-800">
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-neutral-200 dark:bg-neutral-800">
       <Cell label={finalLabels.before} text={text} highlight={highlight} style={{ ...base, fontFeatureSettings: before }} />
       <Cell label={finalLabels.after} text={text} highlight={highlight} style={{ ...base, fontFeatureSettings: after }} lang={lang} />
     </div>
@@ -46,9 +46,9 @@ function Cell({
   highlight?: string[]
 }) {
   return (
-    <div className="bg-neutral-950 p-4">
+    <div className="bg-white p-4 dark:bg-neutral-950">
       <div className="mb-2 text-[11px] uppercase tracking-wide text-neutral-500">{label}</div>
-      <div style={style} className="break-words text-neutral-100" lang={lang}>
+      <div style={style} className="break-words text-neutral-900 dark:text-neutral-100" lang={lang}>
         {highlightText(text, highlight)}
       </div>
     </div>

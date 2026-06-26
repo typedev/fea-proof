@@ -7,17 +7,15 @@ export function FeatureList({
   samples = new Map(),
   cssFamily,
   size,
-  customText,
 }: {
   features: FeatureInfo[]
   samples?: Map<string, FeatureSample>
   cssFamily: string
   size?: number
-  customText?: string
 }) {
   if (features.length === 0) {
     return (
-      <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 text-sm text-neutral-400">
+      <div className="rounded-2xl border border-neutral-200 bg-white p-6 text-sm text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-400">
         No GSUB/GPOS features found in this font.
       </div>
     )
@@ -41,7 +39,6 @@ export function FeatureList({
           sample={samples.get(f.tag)}
           cssFamily={cssFamily}
           size={size}
-          customText={customText}
         />
       ))}
     </div>

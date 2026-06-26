@@ -1,17 +1,17 @@
 export function Controls({
   size,
   onSize,
-  customText,
-  onCustomText,
+  theme,
+  onToggleTheme,
 }: {
   size: number
   onSize: (v: number) => void
-  customText: string
-  onCustomText: (v: string) => void
+  theme: 'light' | 'dark'
+  onToggleTheme: () => void
 }) {
   return (
-    <div className="sticky top-0 z-10 flex flex-wrap items-center gap-4 rounded-xl border border-neutral-800 bg-neutral-900/80 p-3 backdrop-blur">
-      <label className="flex items-center gap-2 text-sm text-neutral-400">
+    <div className="sticky top-0 z-10 flex flex-wrap items-center gap-4 rounded-xl border border-neutral-200 bg-white/80 p-3 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/80">
+      <label className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
         Size
         <input
           type="range"
@@ -21,25 +21,16 @@ export function Controls({
           onChange={(e) => onSize(Number(e.target.value))}
           className="accent-indigo-500"
         />
-        <span className="w-8 tabular-nums text-neutral-300">{size}</span>
+        <span className="w-8 tabular-nums text-neutral-700 dark:text-neutral-300">{size}</span>
       </label>
-      <div className="flex min-w-48 flex-1 items-center gap-2">
-        <input
-          type="text"
-          value={customText}
-          onChange={(e) => onCustomText(e.target.value)}
-          placeholder="Custom sample text (overrides auto-picked words)"
-          className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-100 placeholder:text-neutral-600 focus:border-indigo-500 focus:outline-none"
-        />
-        {customText && (
-          <button
-            onClick={() => onCustomText('')}
-            className="shrink-0 text-xs text-neutral-500 hover:text-neutral-300"
-          >
-            clear
-          </button>
-        )}
-      </div>
+      <div className="flex-1" />
+      <button
+        onClick={onToggleTheme}
+        className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 dark:border-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-800"
+        title="Toggle light / dark theme"
+      >
+        {theme === 'dark' ? '☀ Light' : '☾ Dark'}
+      </button>
     </div>
   )
 }

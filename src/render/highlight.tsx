@@ -13,6 +13,22 @@ export function highlightText(text: string, needles?: string[]): ReactNode {
   if (list.length === 0) return text
 
   const lower = text.toLowerCase()
+
+  // Highlighting only helps when the substituted glyphs stand out among
+  // unaffected ones. If almost everything in the sample is affected (e.g. small
+  // caps over an all-letters phrase), the change is already obvious — skip it.
+  const nonSpace = text.replace(/\s/g, '').length
+  let affected = 0
+  for (let p = 0; p < text.length; ) {
+    const hit = list.find((n) => lower.startsWith(n, p))
+    if (hit) {
+      affected += hit.length
+      p += hit.length
+    } else {
+      p += 1
+    }
+  }
+  if (nonSpace === 0 || affected / nonSpace > 0.6) return text
   const out: ReactNode[] = []
   let plain = ''
   let i = 0
