@@ -170,6 +170,25 @@ export async function prepareSamples(
       continue
     }
 
+    // case (Case-Sensitive Forms) raises punctuation/symbols to cap height —
+    // interleave each affected glyph with capital H to show it in context.
+    if (feature.tag === 'case' && feature.tables.includes('GSUB') && !feature.ignored) {
+      const chars = affectedInputChars(font, feature, reverse)
+      if (chars.length > 0) {
+        const shown = chars.slice(0, 30)
+        const text = 'H' + shown.map((c) => c + 'H').join('')
+        result.set('case', {
+          tag: 'case',
+          kind: 'single',
+          text,
+          usedCoverage: false,
+          highlight: shown,
+          affected: chars,
+        })
+      }
+      continue
+    }
+
     // Figure features: fixed numeric template.
     if (
       FIGURE_TEMPLATES[feature.tag] &&
