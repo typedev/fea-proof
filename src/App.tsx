@@ -116,8 +116,8 @@ function Loaded({
         </div>
       </div>
       <Controls size={size} onSize={setSize} theme={theme} onToggleTheme={onToggleTheme} />
-      <CombinationExplorer groups={combinations} cssFamily={loaded.cssFamily} size={Math.max(size, 36)} />
       <FeatureList features={features} samples={samples} cssFamily={loaded.cssFamily} size={size} />
+      <CombinationExplorer groups={combinations} cssFamily={loaded.cssFamily} size={Math.max(size, 36)} />
     </div>
   )
 }
