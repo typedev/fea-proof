@@ -6,10 +6,14 @@ export function FeatureList({
   features,
   samples = new Map(),
   cssFamily,
+  size,
+  customText,
 }: {
   features: FeatureInfo[]
   samples?: Map<string, FeatureSample>
   cssFamily: string
+  size?: number
+  customText?: string
 }) {
   if (features.length === 0) {
     return (
@@ -36,6 +40,8 @@ export function FeatureList({
           feature={f}
           sample={samples.get(f.tag)}
           cssFamily={cssFamily}
+          size={size}
+          customText={customText}
         />
       ))}
     </div>

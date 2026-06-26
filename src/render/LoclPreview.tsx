@@ -1,14 +1,17 @@
 import type { CSSProperties } from 'react'
 import type { LoclLanguageSample } from '../samples'
+import { highlightText } from './highlight'
 
 export function LoclPreview({
   cssFamily,
   languages,
   size = 28,
+  overrideText,
 }: {
   cssFamily: string
   languages: LoclLanguageSample[]
   size?: number
+  overrideText?: string
 }) {
   const base: CSSProperties = { fontFamily: `"${cssFamily}", system-ui`, fontSize: size, lineHeight: 1.4 }
 
@@ -18,6 +21,7 @@ export function LoclPreview({
         // font-language-override takes the OT language system tag directly — the
         // robust way to force a localized form without relying on lang mapping.
         const localized = { ...base, fontLanguageOverride: `"${l.otTag.trim()}"` } as CSSProperties
+        const text = overrideText || l.text
         return (
           <div key={l.otTag} className="overflow-hidden rounded-lg border border-neutral-800">
             <div className="flex items-center gap-2 bg-neutral-900/60 px-3 py-1.5 text-xs">
@@ -28,8 +32,8 @@ export function LoclPreview({
               {l.usedCoverage && <span className="text-neutral-600">covered glyphs</span>}
             </div>
             <div className="grid grid-cols-2 gap-px bg-neutral-800">
-              <Cell label="default" text={l.text} style={base} />
-              <Cell label={l.name} text={l.text} style={localized} lang={l.bcp47} />
+              <Cell label="default" text={text} style={base} highlight={l.highlight} />
+              <Cell label={l.name} text={text} style={localized} lang={l.bcp47} highlight={l.highlight} />
             </div>
           </div>
         )
@@ -43,17 +47,19 @@ function Cell({
   text,
   style,
   lang,
+  highlight,
 }: {
   label: string
   text: string
   style: CSSProperties
   lang?: string
+  highlight?: string[]
 }) {
   return (
     <div className="bg-neutral-950 p-3">
       <div className="mb-1.5 text-[11px] uppercase tracking-wide text-neutral-500">{label}</div>
       <div style={style} className="break-words text-neutral-100" lang={lang}>
-        {text}
+        {highlightText(text, highlight)}
       </div>
     </div>
   )

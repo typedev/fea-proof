@@ -13,10 +13,19 @@ export interface LoclLanguageSample {
   bcp47?: string
   text: string
   usedCoverage: boolean
+  /** Affected characters to highlight in the sample. */
+  highlight?: string[]
 }
 
 export type FeatureSample =
-  | { tag: string; kind: 'single' | 'ligature'; text: string; usedCoverage: boolean }
+  | {
+      tag: string
+      kind: 'single' | 'ligature'
+      text: string
+      usedCoverage: boolean
+      /** Affected characters / ligature sequences to highlight in the sample. */
+      highlight?: string[]
+    }
   | { tag: string; kind: 'locl'; languages: LoclLanguageSample[] }
 
 const LIGATURE_TAGS = new Set(['liga', 'dlig', 'clig', 'hlig', 'rlig'])
@@ -116,7 +125,14 @@ async function buildLoclSample(
       pool.length > 0
         ? pickSample(chars, { [script]: pool })
         : { text: coverageString(chars), usedCoverage: true }
-    languages.push({ otTag: lang, name: info?.name ?? lang, bcp47: info?.bcp47, text, usedCoverage })
+    languages.push({
+      otTag: lang,
+      name: info?.name ?? lang,
+      bcp47: info?.bcp47,
+      text,
+      usedCoverage,
+      highlight: usedCoverage ? undefined : chars,
+    })
   }
   if (languages.length === 0) return null
 
@@ -178,12 +194,25 @@ export async function prepareSamples(
       const script = item.sequences[0] ? classifyScript(item.sequences[0][0]) : null
       const pool = (script && bank[script]) || []
       const { text, usedCoverage } = pickLigatureSample(item.sequences, pool)
-      result.set(item.tag, { tag: item.tag, kind: 'ligature', text, usedCoverage })
+      result.set(item.tag, {
+        tag: item.tag,
+        kind: 'ligature',
+        text,
+        usedCoverage,
+        highlight: usedCoverage ? undefined : item.sequences,
+      })
     } else if (item.text !== undefined) {
+      // figure template — the whole sample is affected, nothing specific to mark
       result.set(item.tag, { tag: item.tag, kind: 'single', text: item.text, usedCoverage: false })
     } else {
       const { text, usedCoverage } = pickSample(item.chars!, bank)
-      result.set(item.tag, { tag: item.tag, kind: 'single', text, usedCoverage })
+      result.set(item.tag, {
+        tag: item.tag,
+        kind: 'single',
+        text,
+        usedCoverage,
+        highlight: usedCoverage ? undefined : item.chars,
+      })
     }
   }
 

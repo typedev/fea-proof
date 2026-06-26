@@ -37,12 +37,17 @@ export function FeatureCard({
   feature,
   sample,
   cssFamily,
+  size = 30,
+  customText = '',
 }: {
   feature: FeatureInfo
   sample?: FeatureSample
   cssFamily: string
+  size?: number
+  customText?: string
 }) {
   const kinds = feature.gsubLookupTypes.map((t) => LOOKUP_KIND[t] ?? `type ${t}`)
+  const override = customText.trim()
 
   return (
     <div className="rounded-xl border border-neutral-800 bg-neutral-900/30 p-4">
@@ -86,17 +91,24 @@ export function FeatureCard({
         <div className="mt-3 text-xs text-neutral-600">{noPreviewReason(feature)}</div>
       ) : sample.kind === 'locl' ? (
         <div className="mt-3">
-          <LoclPreview cssFamily={cssFamily} languages={sample.languages} />
+          <LoclPreview
+            cssFamily={cssFamily}
+            languages={sample.languages}
+            size={size}
+            overrideText={override || undefined}
+          />
         </div>
       ) : (
         <div className="mt-3">
           <Preview
             cssFamily={cssFamily}
-            text={sample.text}
+            text={override || sample.text}
             tag={feature.tag}
             defaultOn={feature.defaultOn}
+            size={size}
+            highlight={sample.highlight}
           />
-          {sample.usedCoverage && (
+          {!override && sample.usedCoverage && (
             <div className="mt-1.5 text-[11px] text-neutral-600">
               {sample.kind === 'ligature'
                 ? 'component sequences (no word contains them)'

@@ -31,6 +31,7 @@ export interface SampleResult {
 }
 
 export interface PickOptions {
+  minWords?: number
   maxWords?: number
   maxChars?: number
 }
@@ -46,8 +47,9 @@ export function pickSample(
   bank: Record<string, string[]>,
   options: PickOptions = {},
 ): SampleResult {
-  const maxWords = options.maxWords ?? 5
-  const maxChars = options.maxChars ?? 48
+  const minWords = options.minWords ?? 3
+  const maxWords = options.maxWords ?? 6
+  const maxChars = options.maxChars ?? 56
 
   const coverageString = () => ({
     text: [...chars].sort((a, b) => a.codePointAt(0)! - b.codePointAt(0)!).join(''),
@@ -85,6 +87,20 @@ export function pickSample(
     chosen.push(word)
     total += word.length + 1
     for (const ch of word) remaining.delete(ch.toLowerCase())
+  }
+
+  // Context fill: add a few more words containing affected chars for readability,
+  // even once everything is covered (so single-char features aren't one tiny word).
+  if (chosen.length < minWords) {
+    const chosenSet = new Set(chosen)
+    for (const word of pool) {
+      if (chosen.length >= minWords || total >= maxChars) break
+      if (chosenSet.has(word) || !reLetter.test(word[0])) continue
+      if (![...word].some((ch) => target.has(ch.toLowerCase()))) continue
+      chosen.push(word)
+      chosenSet.add(word)
+      total += word.length + 1
+    }
   }
 
   if (chosen.length === 0) return coverageString()

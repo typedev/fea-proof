@@ -6,6 +6,7 @@ import type { LoadedFont } from './core/types'
 import { DropZone } from './ui/DropZone'
 import { Header } from './ui/Header'
 import { FeatureList } from './ui/FeatureList'
+import { Controls } from './ui/Controls'
 
 export function App() {
   const [loaded, setLoaded] = useState<LoadedFont | null>(null)
@@ -63,6 +64,8 @@ function Loaded({
 }) {
   const features = useMemo(() => analyzeFeatures(loaded.font), [loaded])
   const [samples, setSamples] = useState<Map<string, FeatureSample>>(new Map())
+  const [size, setSize] = useState(30)
+  const [customText, setCustomText] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -85,7 +88,14 @@ function Loaded({
           <DropZone onFile={onFile} busy={busy} compact />
         </div>
       </div>
-      <FeatureList features={features} samples={samples} cssFamily={loaded.cssFamily} />
+      <Controls size={size} onSize={setSize} customText={customText} onCustomText={setCustomText} />
+      <FeatureList
+        features={features}
+        samples={samples}
+        cssFamily={loaded.cssFamily}
+        size={size}
+        customText={customText}
+      />
     </div>
   )
 }
