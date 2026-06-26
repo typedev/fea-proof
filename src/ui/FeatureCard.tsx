@@ -1,0 +1,119 @@
+import type { ReactNode } from 'react'
+import type { FeatureInfo } from '../core/types'
+import type { FeatureSample } from '../samples'
+import { Preview } from '../render/Preview'
+import { LoclPreview } from '../render/LoclPreview'
+
+const SCRIPT_LABELS: Record<string, string> = {
+  latn: 'Latin',
+  cyrl: 'Cyrillic',
+  grek: 'Greek',
+  DFLT: 'Default',
+}
+
+const LOOKUP_KIND: Record<number, string> = {
+  1: 'single',
+  2: 'multiple',
+  3: 'alternate',
+  4: 'ligature',
+  5: 'context',
+  6: 'chaining',
+  8: 'reverse',
+}
+
+type Tone = 'neutral' | 'on' | 'off' | 'muted'
+
+function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: Tone }) {
+  const tones: Record<Tone, string> = {
+    neutral: 'bg-neutral-800 text-neutral-300',
+    on: 'bg-emerald-900/50 text-emerald-300',
+    off: 'bg-neutral-800 text-neutral-400',
+    muted: 'bg-neutral-900 text-neutral-500 border border-neutral-800',
+  }
+  return <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${tones[tone]}`}>{children}</span>
+}
+
+export function FeatureCard({
+  feature,
+  sample,
+  cssFamily,
+}: {
+  feature: FeatureInfo
+  sample?: FeatureSample
+  cssFamily: string
+}) {
+  const kinds = feature.gsubLookupTypes.map((t) => LOOKUP_KIND[t] ?? `type ${t}`)
+
+  return (
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900/30 p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <code className="shrink-0 rounded bg-neutral-800 px-1.5 py-0.5 font-mono text-sm text-indigo-300">
+            {feature.tag}
+          </code>
+          <div className="min-w-0">
+            <div className="text-sm text-neutral-200">{feature.name}</div>
+            {(feature.scripts.length > 0 || feature.langs.length > 0) && (
+              <div className="mt-0.5 text-xs text-neutral-500">
+                {feature.scripts.map((s) => SCRIPT_LABELS[s] ?? s).join(', ')}
+                {feature.langs.length > 0 && (
+                  <span className="text-neutral-600"> · langs: {feature.langs.join(', ')}</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+          {kinds.map((k) => (
+            <Badge key={k} tone="muted">
+              {k}
+            </Badge>
+          ))}
+          {feature.ignored ? (
+            <Badge tone="off">ignored</Badge>
+          ) : (
+            <Badge tone={feature.defaultOn ? 'on' : 'off'}>
+              {feature.defaultOn ? 'default on' : 'default off'}
+            </Badge>
+          )}
+          {feature.tables.map((t) => (
+            <Badge key={t}>{t}</Badge>
+          ))}
+        </div>
+      </div>
+
+      {!sample ? (
+        <div className="mt-3 text-xs text-neutral-600">{noPreviewReason(feature)}</div>
+      ) : sample.kind === 'locl' ? (
+        <div className="mt-3">
+          <LoclPreview cssFamily={cssFamily} languages={sample.languages} />
+        </div>
+      ) : (
+        <div className="mt-3">
+          <Preview
+            cssFamily={cssFamily}
+            text={sample.text}
+            tag={feature.tag}
+            defaultOn={feature.defaultOn}
+          />
+          {sample.usedCoverage && (
+            <div className="mt-1.5 text-[11px] text-neutral-600">
+              {sample.kind === 'ligature'
+                ? 'component sequences (no word contains them)'
+                : 'covered glyphs (no readable word contains them)'}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function noPreviewReason(feature: FeatureInfo): string {
+  if (feature.ignored) return 'ignored feature'
+  if (!feature.tables.includes('GSUB')) return 'positioning feature — no glyph substitution to preview'
+  if (feature.tag === 'locl') return 'localized forms — per-language preview coming next'
+  if (feature.tag === 'aalt') return 'access all alternates — alternates grid coming later'
+  if (feature.tag === 'ccmp') return 'glyph composition/decomposition — usually invisible'
+  return 'no single-substitution preview available'
+}

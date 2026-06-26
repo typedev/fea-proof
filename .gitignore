@@ -34,3 +34,18 @@ __pycache__/*
 .env
 .env.*
 !.env.example
+
+# Local test fonts (not committed — add your own; see test_fonts/README.md)
+/test_fonts/*.otf
+/test_fonts/*.ttf
+/test_fonts/*.woff
+/test_fonts/*.woff2
+
+# Node / build output
+/node_modules
+/dist
+npm-debug.log*
+
+# Playwright MCP screenshots/snapshots
+/.playwright-mcp
+*.png
