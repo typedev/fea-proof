@@ -4,6 +4,7 @@ import type { FeatureSample } from '../samples'
 import { Preview } from '../render/Preview'
 import { LoclPreview } from '../render/LoclPreview'
 import { AffectedGlyphs } from './AffectedGlyphs'
+import { ligatureBeforeAfter } from '../render/featureSettings'
 
 // Above this many affected glyphs the word sample can't show them all, so offer
 // the full inventory.
@@ -106,6 +107,10 @@ export function FeatureCard({
             defaultOn={feature.defaultOn}
             size={size}
             highlight={sample.highlight}
+            settings={sample.kind === 'ligature' ? ligatureBeforeAfter(feature.tag) : undefined}
+            labels={
+              sample.kind === 'ligature' ? { before: 'no ligatures', after: feature.tag } : undefined
+            }
           />
           {sample.usedCoverage && (
             <div className="mt-1.5 text-[11px] text-neutral-400 dark:text-neutral-600">
@@ -129,6 +134,7 @@ export function FeatureCard({
                   defaultOn={feature.defaultOn}
                   affected={sample.affected}
                   size={size}
+                  isLigature={sample.kind === 'ligature'}
                 />
               )}
             </>

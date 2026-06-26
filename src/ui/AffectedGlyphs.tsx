@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { beforeAfterSettings } from '../render/featureSettings'
+import { beforeAfterSettings, ligatureBeforeAfter } from '../render/featureSettings'
 import { classifyScript } from '../samples/pick'
 
 const SCRIPT_LABELS: Record<string, string> = {
@@ -20,14 +20,16 @@ export function AffectedGlyphs({
   defaultOn,
   affected,
   size = 26,
+  isLigature = false,
 }: {
   cssFamily: string
   tag: string
   defaultOn: boolean
   affected: string[]
   size?: number
+  isLigature?: boolean
 }) {
-  const { before, after } = beforeAfterSettings(tag, defaultOn)
+  const { before, after } = isLigature ? ligatureBeforeAfter(tag) : beforeAfterSettings(tag, defaultOn)
   const family = `"${cssFamily}", system-ui`
   const glyphSize = Math.min(size, 30)
 

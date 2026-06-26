@@ -14,10 +14,12 @@ interface PreviewProps {
   labels?: { before: string; after: string }
   /** Affected chars / sequences to highlight. */
   highlight?: string[]
+  /** Precomputed font-feature-settings override (e.g. ligature isolation). */
+  settings?: { before: string; after: string }
 }
 
-export function Preview({ cssFamily, text, tag, defaultOn, size = 30, lang, labels, highlight }: PreviewProps) {
-  const { before, after } = beforeAfterSettings(tag, defaultOn)
+export function Preview({ cssFamily, text, tag, defaultOn, size = 30, lang, labels, highlight, settings }: PreviewProps) {
+  const { before, after } = settings ?? beforeAfterSettings(tag, defaultOn)
   const base: CSSProperties = { fontFamily: `"${cssFamily}", system-ui`, fontSize: size, lineHeight: 1.35 }
   const defaultLabels = defaultOn
     ? { before: 'feature off', after: 'default (on)' }
