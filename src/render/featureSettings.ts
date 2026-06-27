@@ -20,7 +20,10 @@ const LIGATURE_FEATURES = ['liga', 'clig', 'dlig', 'hlig', 'rlig']
  * enable ONLY the target for "after" — showing exactly what that feature does.
  */
 export function ligatureBeforeAfter(tag: string): { before: string; after: string } {
-  const before = LIGATURE_FEATURES.map((t) => `"${t}" 0`).join(', ')
-  const after = LIGATURE_FEATURES.map((t) => `"${t}" ${t === tag ? 1 : 0}`).join(', ')
+  // Include the target itself (some ligature features like ordn aren't in the
+  // standard list) so "after" actually enables it.
+  const group = [...new Set([...LIGATURE_FEATURES, tag])]
+  const before = group.map((t) => `"${t}" 0`).join(', ')
+  const after = group.map((t) => `"${t}" ${t === tag ? 1 : 0}`).join(', ')
   return { before, after }
 }

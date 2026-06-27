@@ -30,8 +30,10 @@ export type FeatureSample =
     }
   | { tag: string; kind: 'locl'; languages: LoclLanguageSample[] }
 
-const LIGATURE_TAGS = new Set(['liga', 'dlig', 'clig', 'hlig', 'rlig'])
-const SKIP_FOR_SINGLE = new Set(['locl', 'aalt', 'ccmp'])
+// Handled specially (locl, case) or intentionally not proofed here:
+//  - aalt: access-all-alternates (alternates grid is future work)
+//  - ccmp: glyph composition/decomposition, usually invisible
+const SKIP = new Set(['aalt', 'ccmp'])
 
 // Above this many affected glyphs, highlighting marks (almost) everything and
 // stops being useful (e.g. small caps over the whole alphabet) — so we skip it.
@@ -49,25 +51,6 @@ const FIGURE_TEMPLATES: Record<string, string> = {
   afrc: '1/2  3/4  5/8',
   numr: '0123456789',
   dnom: '0123456789',
-}
-
-function isLigaturePreviewable(feature: FeatureInfo): boolean {
-  return (
-    feature.tables.includes('GSUB') &&
-    !feature.ignored &&
-    LIGATURE_TAGS.has(feature.tag) &&
-    feature.gsubLookupTypes.includes(4)
-  )
-}
-
-export function isSinglePreviewable(feature: FeatureInfo): boolean {
-  return (
-    feature.tables.includes('GSUB') &&
-    !feature.ignored &&
-    !LIGATURE_TAGS.has(feature.tag) &&
-    !SKIP_FOR_SINGLE.has(feature.tag) &&
-    feature.gsubLookupTypes.includes(1)
-  )
 }
 
 function matchLanguage(otTag: string, script: string): LanguageInfo | undefined {
@@ -189,22 +172,24 @@ export async function prepareSamples(
       continue
     }
 
-    // Figure features: fixed numeric template.
-    if (
-      FIGURE_TEMPLATES[feature.tag] &&
-      feature.tables.includes('GSUB') &&
-      !feature.ignored
-    ) {
+    if (!feature.tables.includes('GSUB') || feature.ignored || SKIP.has(feature.tag)) continue
+
+    // Figure features: fixed numeric template (their inputs are often non-cmapped).
+    if (FIGURE_TEMPLATES[feature.tag]) {
       pending.push({ tag: feature.tag, kind: 'single', text: FIGURE_TEMPLATES[feature.tag] })
       continue
     }
 
-    if (isLigaturePreviewable(feature)) {
+    // Dispatch by ACTUAL lookup types, not by tag: fonts implement features with
+    // varying lookups (e.g. dlig as type 1, ordn as type 4). Ligature (type 4)
+    // takes priority; otherwise single (type 1). Contextual-only (type 5/6) has
+    // no preview yet (future: HarfBuzz).
+    if (feature.gsubLookupTypes.includes(4)) {
       const sequences = reconstructLigatures(font, feature, reverse)
       if (sequences.length === 0) continue
       pending.push({ tag: feature.tag, kind: 'ligature', sequences })
       noteScripts(sequences.map((s) => s[0]))
-    } else if (isSinglePreviewable(feature)) {
+    } else if (feature.gsubLookupTypes.includes(1)) {
       const chars = affectedInputChars(font, feature, reverse)
       if (chars.length === 0) continue
       pending.push({ tag: feature.tag, kind: 'single', chars })
