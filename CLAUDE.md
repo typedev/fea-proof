@@ -108,5 +108,6 @@ up source edits, or the probe runs stale code.
 
 - True cross-feature cascades via shaping (stage D of the HarfBuzz plan — deferred;
   the combinations explorer already covers the main case).
-- `salt` alternates (aalt grid is done — `ui/AltGrid.tsx`, rendered via
-  `font-feature-settings: "aalt" N`); more scripts; visual design pass.
+- More scripts (Arabic/Indic/Hebrew); visual design pass. (Alternate features
+  aalt & salt are done — `ui/AltGrid.tsx`, rendered via
+  `font-feature-settings: "<tag>" N`.)
