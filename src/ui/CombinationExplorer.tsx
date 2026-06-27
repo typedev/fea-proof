@@ -105,7 +105,7 @@ export function CombinationExplorer({
   if (groups.length === 0) return null
 
   return (
-    <div className="space-y-3">
+    <div id="feature-combinations" style={{ scrollMarginTop: 'var(--scroll-offset, 1rem)' }} className="space-y-3">
       <div className="px-1">
         <h2 className="text-lg font-semibold">Feature combinations</h2>
         <p className="text-sm text-neutral-500">

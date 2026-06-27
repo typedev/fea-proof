@@ -18,7 +18,7 @@ export function OrphanGlyphs({ font, gids, size = 30 }: { font: Font; gids: numb
   const height = fs * 1.15
 
   return (
-    <section className="space-y-2">
+    <section id="unreachable-glyphs" style={{ scrollMarginTop: 'var(--scroll-offset, 1rem)' }} className="space-y-2">
       <h2 className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Unreachable glyphs</h2>
       <p className="text-xs text-neutral-500 dark:text-neutral-400">
         {gids.length} glyph{gids.length === 1 ? '' : 's'} have no Unicode mapping and aren't used by any

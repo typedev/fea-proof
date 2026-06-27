@@ -17,36 +17,6 @@ export function featureAnchorId(feature: Pick<FeatureInfo, 'tag' | 'tables'>): s
   return `feat-${feature.tag}-${feature.tables.join('')}`.replace(/[^a-z0-9-]/gi, '')
 }
 
-const NAV_ANCHOR_ID = 'feature-nav'
-
-function scrollToId(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
-
-/** Tiny per-card jumps: back up to the navigator, or down to the page bottom. */
-function CardNav() {
-  return (
-    <div className="flex items-center gap-0.5 text-neutral-400 dark:text-neutral-600">
-      <button
-        onClick={() => scrollToId(NAV_ANCHOR_ID)}
-        title="Back to feature navigator"
-        aria-label="Back to feature navigator"
-        className="rounded px-1 leading-none hover:bg-neutral-100 hover:text-indigo-600 dark:hover:bg-neutral-800 dark:hover:text-indigo-300"
-      >
-        ↑
-      </button>
-      <button
-        onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })}
-        title="Jump to bottom of page"
-        aria-label="Jump to bottom of page"
-        className="rounded px-1 leading-none hover:bg-neutral-100 hover:text-indigo-600 dark:hover:bg-neutral-800 dark:hover:text-indigo-300"
-      >
-        ↓
-      </button>
-    </div>
-  )
-}
-
 const SCRIPT_LABELS: Record<string, string> = {
   latn: 'Latin',
   cyrl: 'Cyrillic',
@@ -94,7 +64,8 @@ export function FeatureCard({
   return (
     <div
       id={featureAnchorId(feature)}
-      className="scroll-mt-4 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900/30"
+      style={{ scrollMarginTop: 'var(--scroll-offset, 1rem)' }}
+      className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900/30"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-baseline gap-3">
@@ -113,25 +84,22 @@ export function FeatureCard({
             )}
           </div>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <CardNav />
-          <div className="flex flex-wrap items-center justify-end gap-1">
-            {kinds.map((k) => (
-              <Badge key={k} tone="muted">
-                {k}
-              </Badge>
-            ))}
-            {feature.ignored ? (
-              <Badge tone="off">ignored</Badge>
-            ) : (
-              <Badge tone={feature.defaultOn ? 'on' : 'off'}>
-                {feature.defaultOn ? 'default on' : 'default off'}
-              </Badge>
-            )}
-            {feature.tables.map((t) => (
-              <Badge key={t}>{t}</Badge>
-            ))}
-          </div>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+          {kinds.map((k) => (
+            <Badge key={k} tone="muted">
+              {k}
+            </Badge>
+          ))}
+          {feature.ignored ? (
+            <Badge tone="off">ignored</Badge>
+          ) : (
+            <Badge tone={feature.defaultOn ? 'on' : 'off'}>
+              {feature.defaultOn ? 'default on' : 'default off'}
+            </Badge>
+          )}
+          {feature.tables.map((t) => (
+            <Badge key={t}>{t}</Badge>
+          ))}
         </div>
       </div>
 

@@ -1,7 +1,6 @@
 import type { FeatureInfo } from '../core/types'
 import type { FeatureSample } from '../samples'
 import { FeatureCard } from './FeatureCard'
-import { FeatureNav } from './FeatureNav'
 
 export function FeatureList({
   features,
@@ -27,7 +26,6 @@ export function FeatureList({
 
   return (
     <div className="space-y-3">
-      <FeatureNav features={features} />
       <div className="flex items-baseline justify-between px-1">
         <h2 className="text-lg font-semibold">Features</h2>
         <span className="text-sm text-neutral-500">
