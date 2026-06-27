@@ -27,6 +27,8 @@ export interface LoclLanguageSample {
   usedCoverage: boolean
   /** Character ranges that actually changed (from HarfBuzz diff). */
   highlightRanges?: HighlightRanges
+  /** Full set of input chars this language localizes (for the inventory grid). */
+  affected: string[]
 }
 
 export type FeatureSample =
@@ -174,6 +176,7 @@ async function buildLoclSample(
       text,
       usedCoverage,
       highlightRanges,
+      affected: [...chars].sort((a, b) => a.codePointAt(0)! - b.codePointAt(0)!),
     })
   }
   if (languages.length === 0) return null
