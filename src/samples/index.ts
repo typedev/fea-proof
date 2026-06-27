@@ -4,7 +4,7 @@ import { buildReverseCmap, coverageGlyphs, resolveLookup } from '../core/glyphs'
 import { affectedInputChars, inputCharsForLookups, inputGlyphsForLookups } from '../core/features/single'
 import { reconstructLigatures } from '../core/features/ligature'
 import { changedRanges, type Shaper, type ShapeVariant } from '../core/shape'
-import { buildSubstGraph, resolveGlyph } from '../core/substitution'
+import { buildSubstGraph, resolveGlyph, isPUA } from '../core/substitution'
 import { deriveTriggers } from '../core/context'
 import { beforeAfterFeatures, ligatureFeatures } from '../render/featureSettings'
 import { classifyScript, pickSample, pickLigatureSample } from './pick'
@@ -272,19 +272,22 @@ function buildCascadeSample(
   const fragments: string[] = []
   const seen = new Set<string>()
   const producers = new Set<string>()
-  let derived = 0
   for (const g of gids) {
+    // A real (non-PUA) cmap input means this is an ordinary single-sub (e.g. c2sc
+    // on base capitals) — let the normal path handle it, even if some other inputs
+    // are derived alternates. Cascade is only for ALL-derived features (e.g. a
+    // stylistic set acting solely on PUA-encoded ligatures).
+    const cps = reverse.get(g)
+    if (cps && cps.some((cp) => !isPUA(cp))) return null
     const r = resolveGlyph(g, reverse, graph, { preferProduced: true, excludeTag: feature.tag })
     if (!r || r.features.length === 0) continue
-    derived++
     r.features.forEach((f) => producers.add(f))
     if (!seen.has(r.chars) && !NOT_DISPLAYABLE.test(r.chars)) {
       seen.add(r.chars)
       fragments.push(r.chars)
     }
   }
-  // Only treat as a cascade when most inputs are derived (not a normal single-sub).
-  if (producers.size === 0 || fragments.length === 0 || derived / gids.length < 0.5) return null
+  if (producers.size === 0 || fragments.length === 0) return null
 
   const on = [...producers].map((p) => `${p}=1`)
   const before = [...on, ...(feature.defaultOn ? [`${feature.tag}=0`] : [])]

@@ -4,6 +4,8 @@ import { analyzeFeatures } from './core/introspect'
 import { buildReverseCmap } from './core/glyphs'
 import { buildSubstGraph } from './core/substitution'
 import { findCombinations, type CombinationGroup } from './core/combinations'
+import { findOrphanGlyphs } from './core/inspect'
+import { OrphanGlyphs } from './ui/OrphanGlyphs'
 import { loadShaper, type Shaper } from './core/shape'
 import { prepareSamples, type FeatureSample } from './samples'
 import type { LoadedFont } from './core/types'
@@ -89,6 +91,10 @@ function Loaded({
   onToggleTheme: () => void
 }) {
   const features = useMemo(() => analyzeFeatures(loaded.font), [loaded])
+  const orphans = useMemo(
+    () => findOrphanGlyphs(loaded.font, buildReverseCmap(loaded.font), features).orphans,
+    [loaded, features],
+  )
   const [samples, setSamples] = useState<Map<string, FeatureSample>>(new Map())
   const [combinations, setCombinations] = useState<CombinationGroup[]>([])
   const [shaper, setShaper] = useState<Shaper | undefined>(undefined)
@@ -137,6 +143,7 @@ function Loaded({
         size={Math.max(size, 36)}
         shaper={shaper}
       />
+      <OrphanGlyphs font={loaded.font} gids={orphans} size={size} />
     </div>
   )
 }

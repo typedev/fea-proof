@@ -23,23 +23,27 @@ export function AltGrid({
     fontFeatureSettings: `"${tag}" ${k}`,
   })
 
+  const cell = 'inline-flex min-w-[1.5em] items-center justify-center'
+
   return (
     <div className="space-y-2">
       <div className="text-[11px] uppercase tracking-wide text-neutral-500">
         {alternates.length} glyphs with alternates
       </div>
-      <div className="flex flex-wrap gap-1.5">
+      {/* One row per base glyph; its alternates wrap within the card width so a
+          glyph with dozens of alternates no longer overflows horizontally. */}
+      <div className="space-y-1.5">
         {shown.map((entry) => (
           <div
             key={entry.char}
-            className="flex items-center gap-1 rounded-md border border-neutral-200 bg-white px-2 py-1 dark:border-neutral-800 dark:bg-neutral-900"
+            className="flex flex-wrap items-center gap-x-1 gap-y-1.5 rounded-md border border-neutral-200 bg-white p-1.5 dark:border-neutral-800 dark:bg-neutral-900"
           >
-            <span style={glyph(0)} className="text-neutral-400 dark:text-neutral-600">
+            <span style={glyph(0)} className={`${cell} mr-0.5 text-neutral-400 dark:text-neutral-600`}>
               {entry.char}
             </span>
-            <span className="text-[10px] text-neutral-300 dark:text-neutral-700">→</span>
+            <span className="mr-0.5 text-[10px] text-neutral-300 dark:text-neutral-700">→</span>
             {entry.indices.map((k) => (
-              <span key={k} style={glyph(k)} className="text-neutral-900 dark:text-neutral-100">
+              <span key={k} style={glyph(k)} className={`${cell} text-neutral-900 dark:text-neutral-100`}>
                 {entry.char}
               </span>
             ))}

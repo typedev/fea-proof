@@ -79,12 +79,19 @@ export interface ResolveOptions {
   /** Don't credit this feature as a producer (it's the one being previewed). */
   excludeTag?: string
   /**
-   * Prefer tracing through a producing feature over the glyph's own cmap entry.
-   * Use for "derived" glyphs that happen to be cmapped (e.g. PUA-encoded
-   * ligatures consumed by a stylistic set) so they resolve to readable bases.
+   * Prefer tracing through a producing feature over the glyph's own cmap entry —
+   * but ONLY when that cmap entry is a Private Use Area codepoint (a "fake" encoding
+   * for a derived glyph, e.g. PUA-encoded ligatures a stylistic set consumes). A
+   * real cmap (e.g. 'A', '0') is always kept — otherwise a base letter that merely
+   * happens to be an alternate's output would be mis-traced (turning c2sc into a
+   * spurious aalt cascade).
    */
   preferProduced?: boolean
 }
+
+/** Private Use Area — a "fake" encoding often used for derived/internal glyphs. */
+export const isPUA = (cp: number): boolean =>
+  (cp >= 0xe000 && cp <= 0xf8ff) || (cp >= 0xf0000 && cp <= 0xffffd) || (cp >= 0x100000 && cp <= 0x10fffd)
 
 /**
  * Resolve a glyph id to base characters: via the inverted cmap, or — for glyphs
@@ -127,13 +134,17 @@ export function resolveGlyph(
   }
 
   if (opts.preferProduced) {
-    // Trace when produced by a different feature; otherwise fall back to cmap.
-    const hasOtherProducer = (graph.producedBy.get(gid) ?? []).some((p) =>
-      (graph.lookupFeatures.get(p.lookupIndex) ?? []).some((t) => t !== opts.excludeTag),
-    )
-    if (hasOtherProducer) {
-      const traced = trace()
-      if (traced) return traced
+    // A real (non-PUA) cmap always wins; only trace PUA-encoded or uncmapped
+    // glyphs that another feature produces.
+    const realCmap = !!cps && cps.some((cp) => !isPUA(cp))
+    if (!realCmap) {
+      const hasOtherProducer = (graph.producedBy.get(gid) ?? []).some((p) =>
+        (graph.lookupFeatures.get(p.lookupIndex) ?? []).some((t) => t !== opts.excludeTag),
+      )
+      if (hasOtherProducer) {
+        const traced = trace()
+        if (traced) return traced
+      }
     }
     return cmap
   }
