@@ -57,9 +57,10 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
     `code`, per script), lazy `import.meta.glob` of `wordlists/*.json`. Used
     only for `locl` matching + word sourcing.
   - `wordlists/` — bundled FrequencyWords (MIT), trimmed per language.
-- `src/render/` — `featureSettings.ts` (before/after `font-feature-settings`),
-  `Preview.tsx`, `LoclPreview.tsx` (per-language cells + localized-forms
-  inventory), `highlight.tsx` (mark affected chars).
+- `src/render/` — `featureSettings.ts` (before/after `font-feature-settings`:
+  plain, ligature isolation, and figure isolation `figureBeforeAfter`/
+  `figureFeatures`), `Preview.tsx`, `LoclPreview.tsx` (per-language cells +
+  localized-forms inventory), `highlight.tsx` (mark affected chars).
 - `src/ui/` — `DropZone`, `Header`, `Controls` (sticky bar; hosts `FeatureNav`
   + publishes `--scroll-offset`), `FeatureNav` (jump-list), `FeatureList`,
   `FeatureCard`, `AffectedGlyphs` (full inventory), `AltGrid` (alternates),
@@ -113,6 +114,18 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
   isolated toggle changes nothing (e.g. `lnum` on an already-lining font), the
   proof is honestly identical with a "no effect on this font's default figures"
   note (`inert`). Separately, `aalt`/`salt` are never used as cascade producers.
+- **Cascades label their producer context — "default" must never lie.** A genuine
+  cascade (a feature acting on glyphs another feature makes, e.g. `ss03` restyling
+  `dlig` ligatures) keeps the producer(s) ON in BOTH cells — the target has nothing
+  to act on otherwise. So a bare "default" label would be false. `cascadeLabels`
+  names the actual context from whatever producers were detected: `dlig` /
+  `dlig + ss03`, or `numr + dnom` / `numr + dnom + frac`. The sample carries this
+  as `labels`, passed through to `Preview`. Non-cascade single features keep the
+  default `default`/`feature on` labels. Generalizes to any producer set; if a
+  glyph has multiple possible producers, `resolveGlyph` picks one path (use the
+  combinations explorer to see the full interaction space). Guiding rule: a
+  "default" cell must show either the true font default or an explicitly-named
+  producer context — never a silently pre-applied feature.
 - **Highlighting is a real HarfBuzz shaping diff** (`shape.ts` `changedRanges` →
   `samples/index.ts` → `highlight.tsx`): exact changed clusters as char ranges,
   ratio-gated for single/locl (skip when ~everything changes), exempt for
@@ -173,4 +186,6 @@ up source edits, or the probe runs stale code.
   `latn` only — a font gating their Cyrillic `locl` would show the bare tag).
 
 Done already: alternates (`ui/AltGrid.tsx`, `font-feature-settings: "<tag>" N`);
-full per-language `locl` inventory; sticky feature navigator; GitHub Pages deploy.
+full per-language `locl` inventory; sticky feature navigator; portable
+relative-base deploy; figure-feature isolation + honest cascade labels (swept all
+`test_fonts/` for "default"-cell leaks — clean except intended `dlig` cascades).

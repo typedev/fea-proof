@@ -23,7 +23,10 @@ machine.
   under.
 - **Single substitutions** (`smcp`, `onum`, `ssXX`, `cvXX`, `case`, positional
   `init`/`fina`/`isol`, …) proofed on living words picked from frequency
-  wordlists, with the affected glyphs highlighted.
+  wordlists, with the affected glyphs highlighted. When a feature only acts on
+  another feature's output (e.g. a stylistic set restyling `dlig` ligatures), the
+  proof keeps that producer on and labels the cells with the real context
+  (`dlig` → `dlig + ss03`) rather than a misleading "default".
 - **Ligatures** (`liga`, `dlig`, `hlig`, …) shown inside real words, with standard
   ligatures isolated so you see exactly what each feature adds.
 - **Localized forms** (`locl`) broken out **per language** (via
@@ -33,7 +36,10 @@ machine.
   can be ~30 letters that no single word would surface).
 - **Contextual features** (`calt`, context-driven swashes) — trigger text is
   derived analytically from the lookups and confirmed by shaping.
-- **Figures** (`onum`/`lnum`/`tnum`/`pnum`/`frac`/`zero`…) on numeric templates.
+- **Figures** (`onum`/`lnum`/`tnum`/`pnum`/`frac`/`zero`…) on numeric templates,
+  each shown in isolation so "default" is the font's nominal figures — never a
+  sibling figure style leaking in. A figure feature with no effect on the default
+  is labelled as such instead of faked.
 - **Full glyph inventory** — for features that touch many glyphs (small caps over
   whole alphabets), a "Show all N affected glyphs" grid grouped by script.
 - **Feature combinations** — base glyphs touched by several features get
