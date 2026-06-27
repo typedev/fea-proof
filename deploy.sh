@@ -1,46 +1,45 @@
 #!/usr/bin/env bash
-# Deploy fea-proof to typedev.github.io/fea-proof/
+# Publish the built site to a personal hosting target.
 #
-# Builds the Vite app (base=/fea-proof/) and publishes dist/ into the
-# GitHub Pages repo, then commits & pushes there. Development continues
-# in THIS repo; only the build output is copied out.
+# This script is generic; your target lives in `deploy.config` (git-ignored).
+# Copy `deploy.config.example` to `deploy.config` and set DEPLOY_DEST to a
+# directory inside a git repo you control (e.g. a GitHub Pages repo). The
+# build uses a relative base, so DEPLOY_DEST may be a repo root or any subfolder.
 #
 # Usage: ./deploy.sh
 set -euo pipefail
 
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PAGES_REPO="${PAGES_REPO:-/home/alexander/WORK/typedev.github.io}"
-TARGET="$PAGES_REPO/fea-proof"
+CONFIG="$SRC_DIR/deploy.config"
 
-echo "==> Building (base=/fea-proof/)"
+if [ ! -f "$CONFIG" ]; then
+  echo "ERROR: no deploy.config. Copy deploy.config.example to deploy.config and set DEPLOY_DEST." >&2
+  exit 1
+fi
+# shellcheck source=/dev/null
+source "$CONFIG"
+: "${DEPLOY_DEST:?Set DEPLOY_DEST in deploy.config}"
+
+echo "==> Building"
 cd "$SRC_DIR"
 npm run build
+[ -f "$SRC_DIR/dist/index.html" ] || { echo "ERROR: build produced no dist/index.html" >&2; exit 1; }
 
-if [ ! -f "$SRC_DIR/dist/index.html" ]; then
-  echo "ERROR: dist/index.html not found — build produced no output." >&2
-  exit 1
-fi
+REPO="$(git -C "$(dirname "$DEPLOY_DEST")" rev-parse --show-toplevel)"
 
-if [ ! -d "$PAGES_REPO/.git" ]; then
-  echo "ERROR: $PAGES_REPO is not a git repo." >&2
-  exit 1
-fi
+echo "==> Replacing $DEPLOY_DEST with the fresh build"
+rm -rf "$DEPLOY_DEST"
+mkdir -p "$DEPLOY_DEST"
+cp -R "$SRC_DIR/dist/." "$DEPLOY_DEST/"
 
-echo "==> Replacing $TARGET with fresh build"
-rm -rf "$TARGET"
-mkdir -p "$TARGET"
-cp -R "$SRC_DIR/dist/." "$TARGET/"
-
-echo "==> Committing & pushing in $PAGES_REPO"
-cd "$PAGES_REPO"
-git add fea-proof
-if git diff --cached --quiet; then
-  echo "No changes to publish — nothing to commit."
+echo "==> Committing & pushing in $REPO"
+git -C "$REPO" add "$DEPLOY_DEST"
+if git -C "$REPO" diff --cached --quiet; then
+  echo "No changes to publish."
   exit 0
 fi
+REV="$(git -C "$SRC_DIR" rev-parse --short HEAD)"
+git -C "$REPO" commit -m "deploy fea-proof build from ${REV}"
+git -C "$REPO" push
 
-REV="$(cd "$SRC_DIR" && git rev-parse --short HEAD)"
-git commit -m "fea-proof: deploy build from fea-proof@${REV}"
-git push
-
-echo "==> Done. Live at https://typedev.github.io/fea-proof/"
+echo "==> Done."

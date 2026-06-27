@@ -46,6 +46,9 @@ __pycache__/*
 /dist
 npm-debug.log*
 
+# Personal deploy target (see deploy.config.example)
+/deploy.config
+
 # Playwright MCP screenshots/snapshots
 /.playwright-mcp
 *.png

@@ -15,7 +15,7 @@ npm run dev      # Vite dev server at http://localhost:5173
 npm run build    # tsc --noEmit && vite build  (run before committing)
 npm run test     # Vitest (no suites yet)
 npx tsc --noEmit # type-check only
-./deploy.sh      # build + publish to GitHub Pages (see "Deploy" below)
+./deploy.sh      # build + publish to your configured target (see "Deploy" below)
 ```
 
 Font introspection (ground-truth GSUB/GPOS/cmap dumps): use the git-ignored
@@ -124,15 +124,20 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
 
 ## Deploy
 
-`./deploy.sh` builds (`base: '/fea-proof/'`, set only for `command === 'build'`
-in `vite.config.ts` — dev stays at `/`), copies `dist/` into the sibling
-`typedev.github.io/fea-proof/` repo, then commits & pushes it. Live at
-`https://typedev.github.io/fea-proof/`. **Verify a prod build with a plain
-static server** (lay `dist` out as `<dir>/fea-proof/` and `python3 -m
-http.server`), NOT `npm run preview` — vite preview 404s requests carrying
-`Sec-Fetch-Dest: script` (the header Chromium sends for module scripts), so the
-app won't load in a browser even though curl gets 200. GitHub Pages doesn't do
-this. Push only on the user's explicit request.
+The build uses a **relative base** (`base: process.env.VITE_BASE || './'` in
+`vite.config.ts`), so `dist/` is portable — host it at a root or any subfolder
+without rebuilding. `./deploy.sh` is generic: it reads the publish target from a
+git-ignored `deploy.config` (`DEPLOY_DEST=...`, copied from
+`deploy.config.example`), builds, copies `dist/` there, then commits & pushes
+that repo. Keep personal hosting paths in `deploy.config` only — never hardcode
+them in tracked files (this repo is public). Push only on the user's explicit
+request.
+
+**Verify a prod build with a plain static server** (`npx serve dist`, or lay it
+out under a subfolder and `python3 -m http.server`), NOT `npm run preview` —
+vite preview 404s requests carrying `Sec-Fetch-Dest: script` (the header
+Chromium sends for module scripts), so the app won't load in a browser even
+though curl gets 200. Real static hosts (GitHub Pages, etc.) don't do this.
 
 ## Test fonts
 

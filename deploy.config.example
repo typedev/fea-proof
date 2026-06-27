@@ -1,0 +1,6 @@
+# Personal deploy target for ./deploy.sh — copy this file to `deploy.config`
+# (git-ignored) and edit. DEPLOY_DEST is the directory the built site is copied
+# into; it must live inside a git repo you can push (e.g. a GitHub Pages repo).
+# The build uses a relative base, so this can be a repo root or any subfolder.
+
+DEPLOY_DEST="/path/to/your-username.github.io/fea-proof"

@@ -59,14 +59,18 @@ Drop your own fonts onto the page. For local testing you can put fonts in
 `test_fonts/` (git-ignored — see `test_fonts/README.md`); the dev server serves
 them at `/test_fonts/<file>`.
 
-## Deploy
+## Build & host
 
-The production build targets `base: '/fea-proof/'` (set only for `vite build`;
-the dev server stays at `/`). `./deploy.sh` builds and publishes `dist/` into a
-sibling GitHub Pages repo, then commits & pushes it — live at
-**https://typedev.github.io/fea-proof/**. Verify a prod build with a plain
-static server (e.g. `python3 -m http.server`), **not** `npm run preview` (its
-dev middleware 404s module-script requests).
+`npm run build` emits a static `dist/` with a **relative base**, so you can host
+it anywhere — a domain root, any subfolder (e.g. GitHub Pages project sites),
+Netlify/Vercel/S3, or opened straight from disk. No server-side code. Need an
+absolute base instead? Build with `VITE_BASE=/my/path/ npm run build`.
+
+To preview the production build, serve `dist/` with any static file server (e.g.
+`npx serve dist` or `python3 -m http.server -d dist`).
+
+There's a small `deploy.sh` for pushing the build to a personal hosting repo;
+copy `deploy.config.example` → `deploy.config` and set your target.
 
 ## How it works
 
