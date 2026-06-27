@@ -24,6 +24,8 @@ machine.
 - **Localized forms** (`locl`) broken out **per language** (via
   `font-language-override` + `lang`), e.g. Serbian/Bulgarian Cyrillic, classical
   Latin, etc.
+- **Contextual features** (`calt`, context-driven swashes) — trigger text is
+  derived analytically from the lookups and confirmed by shaping.
 - **Figures** (`onum`/`lnum`/`tnum`/`pnum`/`frac`/`zero`…) on numeric templates.
 - **Full glyph inventory** — for features that touch many glyphs (small caps over
   whole alphabets), a "Show all N affected glyphs" grid grouped by script.
@@ -61,6 +63,10 @@ them at `/test_fonts/<file>`.
 - **Sample text:** affected input glyphs are mapped back to Unicode via the
   inverted cmap, then real words containing those characters are chosen from
   bundled frequency wordlists (lazy-loaded per script).
+- **Analysis:** [HarfBuzz](https://github.com/harfbuzz/harfbuzzjs) (wasm, lazy
+  loaded) is used as an analysis engine — not a renderer — to diff shaping
+  before/after a feature (exact changed glyphs to highlight) and to confirm
+  contextual triggers.
 
 ## Tech
 
@@ -76,9 +82,8 @@ React + Vite + TypeScript + Tailwind v4. No backend.
 
 ## Roadmap
 
-- **HarfBuzz integration** for contextual features (`calt` and swashes/alternates
-  that act on already-substituted glyphs), accurate glyph-diff highlighting, and
-  true cross-feature cascades.
+- True cross-feature cascade detection via shaping (the combinations explorer
+  already covers most of this).
 - Alternates grid for `aalt`/`salt`.
 - More scripts (Arabic, Devanagari, Hebrew — the browser already shapes them; the
   work is sample generation and UI).

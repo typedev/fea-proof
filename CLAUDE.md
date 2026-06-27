@@ -32,6 +32,12 @@ npx tsc --noEmit # type-check only
   - `registry.ts` — feature tag → name, default-on set, ignored set (`kern`).
   - `combinations.ts` — group base glyphs by the set of features that affect them
     (for the combinations explorer).
+  - `shape.ts` — lazy harfbuzzjs (wasm) wrapper: `loadShaper(sfnt)`, `shape()`,
+    `changedRanges()` (character ranges whose shaping differs between two variants).
+  - `substitution.ts` — glyph substitution graph (type 1/3/4) + `resolveGlyph`
+    (trace non-cmapped glyphs back to base chars + producer features).
+  - `context.ts` — `deriveTriggers`: read contextual lookups (type 5/6, Format 3)
+    to build trigger strings analytically.
   - `types.ts` — shared types.
 - `src/samples/` — sample-text generation:
   - `index.ts` — `prepareSamples(font, features)` → `Map<tag, FeatureSample>`; dispatches
@@ -69,10 +75,14 @@ npx tsc --noEmit # type-check only
   components show separately; `after` enables only the target (standard liga/clig
   are default-on and would otherwise ligate identically on both sides). See
   `ligatureBeforeAfter`.
-- **Highlight only partial substitutions** (`highlight.tsx` + `samples/index.ts`):
-  ligatures always mark sequences (in words); single/locl mark affected chars only
-  when ≤ `MAX_HIGHLIGHT_GLYPHS` (so whole-alphabet features like `smcp` don't mark
-  everything).
+- **Highlighting is a real HarfBuzz shaping diff** (`shape.ts` `changedRanges` →
+  `samples/index.ts` → `highlight.tsx`): exact changed clusters as char ranges,
+  ratio-gated for single/locl (skip when ~everything changes), exempt for
+  ligatures. Degrades gracefully (no highlight) if the wasm fails to load.
+- **Contextual features** (calt, context swashes): triggers are derived
+  analytically from the lookup coverage (`context.ts`), non-cmapped context glyphs
+  resolved via the substitution graph (`substitution.ts`); the best trigger is
+  confirmed by shaping. No brute-force.
 - **Default-on/off matters**: default-off → before = baseline, after = `"tag" 1`;
   default-on → before = `"tag" 0`, after = `"tag" 1`.
 
@@ -94,6 +104,7 @@ up source edits, or the probe runs stale code.
 
 ## Deferred (future)
 
-- HarfBuzz (wasm): contextual features (`calt`, context-driven swashes), accurate
-  glyph-diff highlighting, smart triggers, true cross-feature cascades.
+- True cross-feature cascades via shaping (stage D of the HarfBuzz plan — deferred;
+  the combinations explorer already covers the main case).
+- Contextual lookup Formats 1/2 in `context.ts` (only Format 3 handled).
 - `aalt`/`salt` alternates grid; more scripts; visual design pass.
