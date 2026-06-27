@@ -32,6 +32,8 @@ npx tsc --noEmit # type-check only
   - `registry.ts` — feature tag → name, default-on set, ignored set (`kern`).
   - `combinations.ts` — group base glyphs by the set of features that affect them
     (for the combinations explorer).
+  - `interactions.ts` — `effectiveFeatures`: which toggled features actually change
+    the shaping in the current state (live dependency/conflict indication).
   - `shape.ts` — lazy harfbuzzjs (wasm) wrapper: `loadShaper(sfnt)`, `shape()`,
     `changedRanges()` (character ranges whose shaping differs between two variants).
   - `substitution.ts` — glyph substitution graph (type 1/3/4) + `resolveGlyph`
@@ -106,8 +108,6 @@ up source edits, or the probe runs stale code.
 
 ## Deferred (future)
 
-- True cross-feature cascades via shaping (stage D of the HarfBuzz plan — deferred;
-  the combinations explorer already covers the main case).
 - More scripts (Arabic/Indic/Hebrew); visual design pass. (Alternate features
   aalt & salt are done — `ui/AltGrid.tsx`, rendered via
   `font-feature-settings: "<tag>" N`.)

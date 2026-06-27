@@ -31,7 +31,8 @@ machine.
   whole alphabets), a "Show all N affected glyphs" grid grouped by script.
 - **Feature combinations** — base glyphs touched by several features get
   interactive toggles so you can stack them and see how they combine (applied in
-  the font's correct LookupList order by the browser shaper).
+  the font's correct LookupList order). Chips with no effect in the current
+  combination are dimmed, revealing dependencies and conflicts (HarfBuzz-checked).
 - **Alternates** (`aalt`, `salt`) — a grid of every glyph's alternate forms.
 - Adjustable preview size and a light/dark theme.
 
