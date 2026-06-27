@@ -4,6 +4,8 @@ import { buildReverseCmap } from '../core/glyphs'
 import { affectedInputChars, inputCharsForLookups } from '../core/features/single'
 import { reconstructLigatures } from '../core/features/ligature'
 import { changedRanges, type Shaper, type ShapeVariant } from '../core/shape'
+import { buildSubstGraph } from '../core/substitution'
+import { deriveTriggers } from '../core/context'
 import { beforeAfterFeatures, ligatureFeatures } from '../render/featureSettings'
 import { classifyScript, pickSample, pickLigatureSample } from './pick'
 import { LANGUAGES, loadWordlist, loadWordBank, type LanguageInfo, type Script } from './languages'
@@ -31,6 +33,8 @@ export type FeatureSample =
       highlightRanges?: HighlightRanges
       /** Full set of affected chars (single) / sequences (ligature) for the inventory. */
       affected: string[]
+      /** Explicit CSS font-feature-settings override (ligature isolation / contextual). */
+      settings?: { before: string; after: string }
     }
   | { tag: string; kind: 'locl'; languages: LoclLanguageSample[] }
 
@@ -164,6 +168,58 @@ async function buildLoclSample(
   return { tag: feature.tag, kind: 'locl', languages }
 }
 
+/** Hb feature strings → CSS font-feature-settings ("calt=0" → `"calt" 0`). */
+function toCss(features: string[]): string {
+  if (features.length === 0) return 'normal'
+  return features
+    .map((f) => {
+      const [tag, value = '1'] = f.split('=')
+      return `"${tag}" ${value}`
+    })
+    .join(', ')
+}
+
+/**
+ * Contextual feature (calt, context-driven swashes…): derive a trigger string
+ * analytically from the lookups, confirm via shaping that it changes something,
+ * and build a sample with explicit before/after settings (producer features on,
+ * target toggled).
+ */
+function buildContextualSample(
+  font: Font,
+  feature: FeatureInfo,
+  reverse: Map<number, number[]>,
+  graph: ReturnType<typeof buildSubstGraph>,
+  shaper: Shaper,
+): FeatureSample | null {
+  const triggers = deriveTriggers(font, feature, reverse, graph)
+  let best: { text: string; ranges: HighlightRanges; score: number; before: string[]; after: string[] } | null =
+    null
+  for (const t of triggers) {
+    const on = t.requiredFeatures.map((f) => `${f}=1`)
+    const before = [...on, ...(feature.defaultOn ? [`${feature.tag}=0`] : [])]
+    const after = [...on, `${feature.tag}=1`]
+    let ranges: HighlightRanges
+    try {
+      ranges = changedRanges(shaper, t.text, { features: before }, { features: after })
+    } catch {
+      continue
+    }
+    const score = ranges.reduce((n, [s, e]) => n + (e - s), 0)
+    if (score > 0 && (!best || score > best.score)) best = { text: t.text, ranges, score, before, after }
+  }
+  if (!best) return null
+  return {
+    tag: feature.tag,
+    kind: 'single',
+    text: best.text,
+    usedCoverage: false,
+    affected: [],
+    highlightRanges: best.ranges,
+    settings: { before: toCss(best.before), after: toCss(best.after) },
+  }
+}
+
 /** Compute before/after sample text + precise highlight ranges for previewable features. */
 export async function prepareSamples(
   font: Font,
@@ -171,6 +227,7 @@ export async function prepareSamples(
   shaper?: Shaper,
 ): Promise<Map<string, FeatureSample>> {
   const reverse = buildReverseCmap(font)
+  const graph = buildSubstGraph(font, features)
   const result = new Map<string, FeatureSample>()
   const pending: Pending[] = []
   const scripts = new Set<Script>()
@@ -226,19 +283,31 @@ export async function prepareSamples(
     }
 
     // Dispatch by ACTUAL lookup types, not by tag (fonts vary: dlig as type 1,
-    // ordn as type 4). Ligature (type 4) first; else single (type 1).
-    if (feature.gsubLookupTypes.includes(4)) {
+    // ordn as type 4). Try ligature (type 4) → single (type 1) → contextual
+    // (type 5/6); fall through when a kind yields nothing usable.
+    const types = feature.gsubLookupTypes
+    let handled = false
+    if (types.includes(4)) {
       const sequences = reconstructLigatures(font, feature, reverse)
-      if (sequences.length === 0) continue
-      const { before, after } = ligatureFeatures(feature.tag)
-      pending.push({ tag: feature.tag, kind: 'ligature', sequences, affected: sequences, before, after })
-      noteScripts(sequences.map((s) => s[0]))
-    } else if (feature.gsubLookupTypes.includes(1)) {
+      if (sequences.length > 0) {
+        const { before, after } = ligatureFeatures(feature.tag)
+        pending.push({ tag: feature.tag, kind: 'ligature', sequences, affected: sequences, before, after })
+        noteScripts(sequences.map((s) => s[0]))
+        handled = true
+      }
+    }
+    if (!handled && types.includes(1)) {
       const chars = affectedInputChars(font, feature, reverse)
-      if (chars.length === 0) continue
-      const { before, after } = beforeAfterFeatures(feature.tag, feature.defaultOn)
-      pending.push({ tag: feature.tag, kind: 'single', chars, affected: chars, before, after })
-      noteScripts(chars)
+      if (chars.length > 0) {
+        const { before, after } = beforeAfterFeatures(feature.tag, feature.defaultOn)
+        pending.push({ tag: feature.tag, kind: 'single', chars, affected: chars, before, after })
+        noteScripts(chars)
+        handled = true
+      }
+    }
+    if (!handled && shaper && types.some((t) => t === 5 || t === 6)) {
+      const sample = buildContextualSample(font, feature, reverse, graph, shaper)
+      if (sample) result.set(feature.tag, sample)
     }
   }
 

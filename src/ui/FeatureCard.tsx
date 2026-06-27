@@ -107,7 +107,7 @@ export function FeatureCard({
             defaultOn={feature.defaultOn}
             size={size}
             highlightRanges={sample.highlightRanges}
-            settings={sample.kind === 'ligature' ? ligatureBeforeAfter(feature.tag) : undefined}
+            settings={sample.kind === 'ligature' ? ligatureBeforeAfter(feature.tag) : sample.settings}
             labels={
               sample.kind === 'ligature' ? { before: 'no ligatures', after: feature.tag } : undefined
             }
@@ -150,5 +150,7 @@ function noPreviewReason(feature: FeatureInfo): string {
   if (!feature.tables.includes('GSUB')) return 'positioning feature — no glyph substitution to preview'
   if (feature.tag === 'aalt') return 'access all alternates — alternates grid coming later'
   if (feature.tag === 'ccmp') return 'glyph composition/decomposition — usually invisible'
+  if (feature.gsubLookupTypes.some((t) => t === 5 || t === 6))
+    return 'contextual feature — no text trigger found'
   return 'no single-substitution preview available'
 }
