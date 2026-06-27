@@ -435,32 +435,34 @@ export async function prepareSamples(
         : []
     let handled = false
     if (types.includes(4)) {
-      const { sequences, producers } = reconstructLigatures(font, feature, reverse, graph)
-      if (sequences.length > 0 && producers.length > 0) {
-        // Cascade-ligature: components are produced by other features (e.g. frac
-        // ligating aalt-made digit forms). Enable producers, then toggle target —
-        // proof on the real base sequences, not a hard-coded fraction template.
+      const { sequences, cascades } = reconstructLigatures(font, feature, reverse, graph)
+      if (sequences.length > 0) {
+        // Plain ligatures (fi, fl …) — standard before/after, no prerequisites.
+        const { before, after } = ligatureFeatures(feature.tag)
+        pending.push({ tag: feature.tag, kind: 'ligature', sequences, affected: sequences, before, after, examples })
+        noteScripts(sequences.map((s) => s[0]))
+        handled = true
+      } else if (cascades.length > 0) {
+        // Every ligature consumes glyphs another feature makes (e.g. frac ligating
+        // aalt-made digit forms): enable producers, then toggle the target.
+        const producers = [...new Set(cascades.flatMap((c) => c.producers))]
+        const seqs = cascades.map((c) => c.text)
         const on = producers.map((p) => `${p}=1`)
         const before = [...on, ...(feature.defaultOn ? [`${feature.tag}=0`] : [])]
         const after = [...on, `${feature.tag}=1`]
-        const text = sequences.slice(0, 16).join('  ')
+        const text = seqs.slice(0, 16).join('  ')
         const sample: FeatureSample = {
           tag: feature.tag,
           kind: 'single',
           text,
           usedCoverage: false,
-          affected: sequences,
+          affected: seqs,
           highlightRanges: shapingHighlight(shaper, text, { features: before }, { features: after }, undefined, false),
           settings: { before: toCss(before), after: toCss(after) },
         }
         if (examples.length > 0) sample.examples = examples
         result.set(feature.tag, sample)
-        noteScripts(sequences.map((s) => s[0]))
-        handled = true
-      } else if (sequences.length > 0) {
-        const { before, after } = ligatureFeatures(feature.tag)
-        pending.push({ tag: feature.tag, kind: 'ligature', sequences, affected: sequences, before, after, examples })
-        noteScripts(sequences.map((s) => s[0]))
+        noteScripts(seqs.map((s) => s[0]))
         handled = true
       }
     }

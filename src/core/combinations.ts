@@ -91,12 +91,13 @@ export function findCombinations(
     for (const occ of feature.occurrences) for (const li of occ.lookupIndexes) lookupIndexes.add(li)
 
     if (feature.gsubLookupTypes.includes(4)) {
-      const { sequences, producers } = reconstructLigatures(font, feature, reverse, graph)
-      for (const seq of sequences) {
-        credit(feature.tag, seq)
-        for (const p of producers) {
+      const { sequences, cascades } = reconstructLigatures(font, feature, reverse, graph)
+      for (const seq of sequences) credit(feature.tag, seq)
+      for (const c of cascades) {
+        credit(feature.tag, c.text)
+        for (const p of c.producers) {
           ensureOrder(p)
-          credit(p, seq)
+          credit(p, c.text)
         }
       }
     }
