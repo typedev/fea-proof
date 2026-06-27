@@ -5,6 +5,7 @@ import { Preview } from '../render/Preview'
 import { LoclPreview } from '../render/LoclPreview'
 import { AffectedGlyphs } from './AffectedGlyphs'
 import { ContextualExamples } from './ContextualExamples'
+import { AltGrid } from './AltGrid'
 import { ligatureBeforeAfter } from '../render/featureSettings'
 
 // Above this many affected glyphs the word sample can't show them all, so offer
@@ -99,6 +100,10 @@ export function FeatureCard({
         <div className="mt-3">
           <LoclPreview cssFamily={cssFamily} languages={sample.languages} size={size} />
         </div>
+      ) : sample.kind === 'aalt' ? (
+        <div className="mt-3">
+          <AltGrid cssFamily={cssFamily} alternates={sample.alternates} size={size} />
+        </div>
       ) : (
         <div className="mt-3 space-y-3">
           {sample.text && (
@@ -162,7 +167,7 @@ export function FeatureCard({
 function noPreviewReason(feature: FeatureInfo): string {
   if (feature.ignored) return 'ignored feature'
   if (!feature.tables.includes('GSUB')) return 'positioning feature — no glyph substitution to preview'
-  if (feature.tag === 'aalt') return 'access all alternates — alternates grid coming later'
+  if (feature.tag === 'aalt') return 'access all alternates — no alternates found'
   if (feature.tag === 'ccmp') return 'glyph composition/decomposition — usually invisible'
   if (feature.gsubLookupTypes.some((t) => t === 5 || t === 6))
     return 'contextual feature — no text trigger found'

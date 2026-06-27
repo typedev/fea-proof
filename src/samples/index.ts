@@ -1,6 +1,6 @@
 import type { Font } from 'opentype.js'
 import type { FeatureInfo } from '../core/types'
-import { buildReverseCmap } from '../core/glyphs'
+import { buildReverseCmap, coverageGlyphs, resolveLookup } from '../core/glyphs'
 import { affectedInputChars, inputCharsForLookups } from '../core/features/single'
 import { reconstructLigatures } from '../core/features/ligature'
 import { changedRanges, type Shaper, type ShapeVariant } from '../core/shape'
@@ -45,11 +45,13 @@ export type FeatureSample =
       examples?: ContextualExample[]
     }
   | { tag: string; kind: 'locl'; languages: LoclLanguageSample[] }
+  | { tag: string; kind: 'aalt'; alternates: { char: string; indices: number[] }[] }
 
-// Handled specially (locl, case) or intentionally not proofed here:
-//  - aalt: access-all-alternates (alternates grid is future work)
+// Handled specially (locl, case, aalt) or intentionally not proofed here:
 //  - ccmp: glyph composition/decomposition, usually invisible
-const SKIP = new Set(['aalt', 'ccmp'])
+const SKIP = new Set(['ccmp'])
+
+const NOT_DISPLAYABLE = /[\p{M}\p{Cf}\p{Cc}]/u
 
 const HB_SCRIPT: Record<Script, string> = { latn: 'Latn', cyrl: 'Cyrl', grek: 'Grek' }
 
@@ -177,6 +179,74 @@ async function buildLoclSample(
   return { tag: feature.tag, kind: 'locl', languages }
 }
 
+interface AaltLookup {
+  lookupType: number
+  subtables?: unknown[]
+}
+
+/**
+ * aalt (Access All Alternates): for each base glyph, the set of alternates. We
+ * render each alternate via CSS `font-feature-settings: "aalt" N`. Count the
+ * alternates per character from the type 1/3 lookups, then (if a shaper is
+ * available) confirm which N values yield distinct glyphs.
+ */
+function buildAaltSample(
+  font: Font,
+  feature: FeatureInfo,
+  reverse: Map<number, number[]>,
+  shaper?: Shaper,
+): FeatureSample | null {
+  const gsub = (font.tables as Record<string, { lookups?: AaltLookup[] } | undefined>).gsub
+  const lookups = gsub?.lookups ?? []
+  const lookupIndexes = new Set<number>()
+  for (const occ of feature.occurrences) for (const li of occ.lookupIndexes) lookupIndexes.add(li)
+
+  const counts = new Map<string, number>()
+  for (const li of lookupIndexes) {
+    const lookup = lookups[li]
+    if (!lookup) continue
+    const { type, subtables } = resolveLookup(lookup)
+    if (type !== 1 && type !== 3) continue
+    for (const st of subtables) {
+      const glyphs = coverageGlyphs(st.coverage as Parameters<typeof coverageGlyphs>[0])
+      const altSets = st.alternateSets as number[][] | undefined
+      glyphs.forEach((g, i) => {
+        const cps = reverse.get(g)
+        if (!cps || !cps.length) return
+        const ch = String.fromCodePoint(cps[0])
+        if (NOT_DISPLAYABLE.test(ch)) return
+        const n = type === 3 ? (altSets?.[i]?.length ?? 0) : 1
+        counts.set(ch, (counts.get(ch) ?? 0) + n)
+      })
+    }
+  }
+
+  const alternates: { char: string; indices: number[] }[] = []
+  for (const [char, count] of counts) {
+    if (count < 1) continue
+    let indices: number[]
+    if (shaper) {
+      const def = shaper.shape(char, { features: ['aalt=0'] })[0]?.g
+      const seen = new Set<number>([def ?? -1])
+      indices = []
+      for (let k = 1; k <= count; k++) {
+        const g = shaper.shape(char, { features: [`aalt=${k}`] })[0]?.g
+        if (g != null && !seen.has(g)) {
+          seen.add(g)
+          indices.push(k)
+        }
+      }
+    } else {
+      indices = Array.from({ length: count }, (_, i) => i + 1)
+    }
+    if (indices.length) alternates.push({ char, indices })
+  }
+  if (alternates.length === 0) return null
+
+  alternates.sort((a, b) => a.char.codePointAt(0)! - b.char.codePointAt(0)!)
+  return { tag: feature.tag, kind: 'aalt', alternates }
+}
+
 /** Hb feature strings → CSS font-feature-settings ("calt=0" → `"calt" 0`). */
 function toCss(features: string[]): string {
   if (features.length === 0) return 'normal'
@@ -251,6 +321,12 @@ export async function prepareSamples(
     if (feature.tag === 'locl') {
       const locl = await buildLoclSample(font, feature, reverse, shaper)
       if (locl) result.set(feature.tag, locl)
+      continue
+    }
+
+    if (feature.tag === 'aalt' && feature.tables.includes('GSUB') && !feature.ignored) {
+      const aalt = buildAaltSample(font, feature, reverse, shaper)
+      if (aalt) result.set(feature.tag, aalt)
       continue
     }
 

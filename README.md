@@ -32,6 +32,7 @@ machine.
 - **Feature combinations** — base glyphs touched by several features get
   interactive toggles so you can stack them and see how they combine (applied in
   the font's correct LookupList order by the browser shaper).
+- **Access all alternates** (`aalt`) — a grid of every glyph's alternates.
 - Adjustable preview size and a light/dark theme.
 
 Scripts covered for sample generation: **Latin, Cyrillic, Greek** (the
@@ -84,7 +85,7 @@ React + Vite + TypeScript + Tailwind v4. No backend.
 
 - True cross-feature cascade detection via shaping (the combinations explorer
   already covers most of this).
-- Alternates grid for `aalt`/`salt`.
+- Alternates grid for `salt` (aalt is done).
 - More scripts (Arabic, Devanagari, Hebrew — the browser already shapes them; the
   work is sample generation and UI).
 - Visual design pass.
