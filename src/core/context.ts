@@ -49,7 +49,49 @@ export interface Trigger {
   requiredFeatures: string[]
 }
 
-const firstGlyph = (cov?: Coverage): number | undefined => coverageGlyphs(cov)[0]
+type Script = 'latn' | 'cyrl' | 'grek'
+
+// Common letters per script, in preference order — to pick a readable
+// representative from a broad coverage/class (e.g. "any letter") instead of the
+// arbitrary first glyph (often Cyrillic by glyph order → confusing "юA").
+const PREF_BY_SCRIPT: Record<Script, number[]> = {
+  latn: [...'oneasitrlcdumhpbg'].map((c) => c.codePointAt(0)!),
+  cyrl: [...'оаентилсрвкмдп'].map((c) => c.codePointAt(0)!),
+  grek: [...'οαεντισ'].map((c) => c.codePointAt(0)!),
+}
+
+function scriptOfCp(cp: number): Script | null {
+  if ((cp >= 0x41 && cp <= 0x5a) || (cp >= 0x61 && cp <= 0x7a) || (cp >= 0xc0 && cp <= 0x24f)) return 'latn'
+  if (cp >= 0x400 && cp <= 0x4ff) return 'cyrl'
+  if (cp >= 0x370 && cp <= 0x3ff) return 'grek'
+  return null
+}
+
+/**
+ * A readable representative glyph from a coverage: prefer a common letter of the
+ * given script (so context for a Cyrillic target uses Cyrillic, not Latin).
+ */
+function chooseRep(glyphs: number[], reverse: Map<number, number[]>, script?: Script): number | undefined {
+  if (glyphs.length <= 1) return glyphs[0]
+  const cpOf = (g: number) => reverse.get(g)?.[0]
+  const prefs = script ? [PREF_BY_SCRIPT[script]] : [PREF_BY_SCRIPT.latn, PREF_BY_SCRIPT.cyrl, PREF_BY_SCRIPT.grek]
+  for (const pref of prefs) for (const want of pref) for (const g of glyphs) if (cpOf(g) === want) return g
+  for (const g of glyphs) {
+    const cp = cpOf(g)
+    if (cp !== undefined && scriptOfCp(cp) && (!script || scriptOfCp(cp) === script)) return g
+  }
+  for (const g of glyphs) {
+    const cp = cpOf(g)
+    if (cp !== undefined && scriptOfCp(cp)) return g
+  }
+  return glyphs[0]
+}
+
+const scriptOfGlyph = (g: number | undefined, reverse: Map<number, number[]>): Script | undefined => {
+  if (g === undefined) return undefined
+  const cp = reverse.get(g)?.[0]
+  return cp !== undefined ? scriptOfCp(cp) ?? undefined : undefined
+}
 
 function classOf(cd: ClassDef | undefined, g: number): number {
   if (!cd) return 0
@@ -64,15 +106,22 @@ function classOf(cd: ClassDef | undefined, g: number): number {
 }
 
 /** A representative glyph for a class (class 0 = "any" → fallback). */
-function classRep(cd: ClassDef | undefined, c: number, fallback: number): number {
+function classRep(
+  cd: ClassDef | undefined,
+  c: number,
+  fallback: number,
+  reverse: Map<number, number[]>,
+  script?: Script,
+): number {
   if (c === 0 || !cd) return fallback
+  const glyphs: number[] = []
   if (cd.format === 1 && cd.classes) {
-    for (let i = 0; i < cd.classes.length; i++) if (cd.classes[i] === c) return (cd.startGlyph ?? 0) + i
+    for (let i = 0; i < cd.classes.length; i++) if (cd.classes[i] === c) glyphs.push((cd.startGlyph ?? 0) + i)
   }
   if (cd.format === 2 && cd.ranges) {
-    for (const r of cd.ranges) if (r.classId === c) return r.start
+    for (const r of cd.ranges) if (r.classId === c) for (let g = r.start; g <= r.end; g++) glyphs.push(g)
   }
-  return fallback
+  return chooseRep(glyphs, reverse, script) ?? fallback
 }
 
 /** A cmapped common letter glyph, used to stand in for "any glyph" (class 0). */
@@ -90,18 +139,23 @@ function subtableSequences(
   st: ContextSubtable,
   type: number,
   fallback: number,
+  reverse: Map<number, number[]>,
 ): number[][] {
   const seqs: number[][] = []
 
   if (st.substFormat === 3) {
+    const inputCovs = (type === 6 ? st.inputCoverage : st.coverages) ?? []
+    const input = inputCovs.map((c) => chooseRep(coverageGlyphs(c), reverse))
+    if (!input.length) return seqs
+    // Context (backtrack/lookahead) uses the input's script so reps don't mix
+    // scripts (Cyrillic target → Cyrillic context, not Latin).
+    const script = input.map((g) => scriptOfGlyph(g, reverse)).find(Boolean)
     if (type === 6) {
-      const back = (st.backtrackCoverage ?? []).map(firstGlyph)
-      const input = (st.inputCoverage ?? []).map(firstGlyph)
-      const ahead = (st.lookaheadCoverage ?? []).map(firstGlyph)
-      if (input.length) seqs.push([...back.reverse(), ...input, ...ahead].filter((g): g is number => g !== undefined))
+      const back = (st.backtrackCoverage ?? []).map((c) => chooseRep(coverageGlyphs(c), reverse, script))
+      const ahead = (st.lookaheadCoverage ?? []).map((c) => chooseRep(coverageGlyphs(c), reverse, script))
+      seqs.push([...back.reverse(), ...input, ...ahead].filter((g): g is number => g !== undefined))
     } else {
-      const input = (st.coverages ?? []).map(firstGlyph)
-      if (input.length) seqs.push(input.filter((g): g is number => g !== undefined))
+      seqs.push(input.filter((g): g is number => g !== undefined))
     }
     return seqs
   }
@@ -127,13 +181,14 @@ function subtableSequences(
       const icd = st.inputClassDef
       ;(st.chainClassSet ?? []).forEach((rules, c) => {
         if (!rules) return
-        const first = cov.find((g) => classOf(icd, g) === c) ?? classRep(icd, c, fallback)
+        const first = chooseRep(cov.filter((g) => classOf(icd, g) === c), reverse) ?? classRep(icd, c, fallback, reverse)
+        const script = scriptOfGlyph(first, reverse)
         for (const rule of rules) {
           seqs.push([
-            ...(rule.backtrack ?? []).slice().reverse().map((cl) => classRep(st.backtrackClassDef, cl, fallback)),
+            ...(rule.backtrack ?? []).slice().reverse().map((cl) => classRep(st.backtrackClassDef, cl, fallback, reverse, script)),
             first,
-            ...(rule.input ?? []).map((cl) => classRep(icd, cl, fallback)),
-            ...(rule.lookahead ?? []).map((cl) => classRep(st.lookaheadClassDef, cl, fallback)),
+            ...(rule.input ?? []).map((cl) => classRep(icd, cl, fallback, reverse)),
+            ...(rule.lookahead ?? []).map((cl) => classRep(st.lookaheadClassDef, cl, fallback, reverse, script)),
           ])
         }
       })
@@ -141,9 +196,9 @@ function subtableSequences(
       const cd = st.classDef
       ;(st.classSets ?? []).forEach((rules, c) => {
         if (!rules) return
-        const first = cov.find((g) => classOf(cd, g) === c) ?? classRep(cd, c, fallback)
+        const first = chooseRep(cov.filter((g) => classOf(cd, g) === c), reverse) ?? classRep(cd, c, fallback, reverse)
         for (const rule of rules) {
-          seqs.push([first, ...(rule.classes ?? []).map((cl) => classRep(cd, cl, fallback))])
+          seqs.push([first, ...(rule.classes ?? []).map((cl) => classRep(cd, cl, fallback, reverse))])
         }
       })
     }
@@ -186,7 +241,7 @@ export function deriveTriggers(
     if (type !== 5 && type !== 6) continue
 
     for (const st of subtables as unknown as ContextSubtable[]) {
-      for (const seq of subtableSequences(st, type, fallback)) {
+      for (const seq of subtableSequences(st, type, fallback, reverse)) {
         if (seq.length === 0 || seq.some((g) => g === undefined)) continue
         const resolved = seq.map((g) => resolveGlyph(g, reverse, graph))
         if (resolved.some((r) => !r)) continue
