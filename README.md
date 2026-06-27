@@ -23,7 +23,9 @@ machine.
   ligatures isolated so you see exactly what each feature adds.
 - **Localized forms** (`locl`) broken out **per language** (via
   `font-language-override` + `lang`), e.g. Serbian/Bulgarian Cyrillic, classical
-  Latin, etc.
+  Latin, etc. — each language shows a real-word proof **plus the complete
+  default→localized inventory** of every form it substitutes (Bulgarian alone
+  can be ~30 letters that no single word would surface).
 - **Contextual features** (`calt`, context-driven swashes) — trigger text is
   derived analytically from the lookups and confirmed by shaping.
 - **Figures** (`onum`/`lnum`/`tnum`/`pnum`/`frac`/`zero`…) on numeric templates.
@@ -34,6 +36,11 @@ machine.
   the font's correct LookupList order). Chips with no effect in the current
   combination are dimmed, revealing dependencies and conflicts (HarfBuzz-checked).
 - **Alternates** (`aalt`, `salt`) — a grid of every glyph's alternate forms.
+- **Unreachable glyphs** — glyphs with no Unicode mapping that no feature toggle
+  can produce, so they can't be typed or reached at all (useful QA signal).
+- **Feature navigator** — a jump-list in the sticky top bar with a chip per
+  feature (plus the Feature combinations / Unreachable sections); scrolls the
+  page to any of them.
 - Adjustable preview size and a light/dark theme.
 
 Scripts covered for sample generation: **Latin, Cyrillic, Greek** (the
@@ -51,6 +58,15 @@ npm run test     # Vitest (unit tests)
 Drop your own fonts onto the page. For local testing you can put fonts in
 `test_fonts/` (git-ignored — see `test_fonts/README.md`); the dev server serves
 them at `/test_fonts/<file>`.
+
+## Deploy
+
+The production build targets `base: '/fea-proof/'` (set only for `vite build`;
+the dev server stays at `/`). `./deploy.sh` builds and publishes `dist/` into a
+sibling GitHub Pages repo, then commits & pushes it — live at
+**https://typedev.github.io/fea-proof/**. Verify a prod build with a plain
+static server (e.g. `python3 -m http.server`), **not** `npm run preview` (its
+dev middleware 404s module-script requests).
 
 ## How it works
 

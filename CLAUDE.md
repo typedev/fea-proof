@@ -13,9 +13,14 @@ uploaded.** React + Vite + TypeScript + Tailwind v4.
 ```sh
 npm run dev      # Vite dev server at http://localhost:5173
 npm run build    # tsc --noEmit && vite build  (run before committing)
-npm run test     # Vitest
+npm run test     # Vitest (no suites yet)
 npx tsc --noEmit # type-check only
+./deploy.sh      # build + publish to GitHub Pages (see "Deploy" below)
 ```
+
+Font introspection (ground-truth GSUB/GPOS/cmap dumps): use the git-ignored
+Python venv — `.venv/bin/python` has **fonttools** (+ `ttx`, `pyftsubset`).
+Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <pkg>`.
 
 ## Architecture
 
@@ -40,19 +45,25 @@ npx tsc --noEmit # type-check only
     (trace non-cmapped glyphs back to base chars + producer features).
   - `context.ts` — `deriveTriggers`: read contextual lookups (type 5/6, Format 3)
     to build trigger strings analytically.
+  - `inspect.ts` — `findOrphanGlyphs`: glyphs with no cmap that no feature can
+    produce (the "Unreachable glyphs" section).
   - `types.ts` — shared types.
 - `src/samples/` — sample-text generation:
   - `index.ts` — `prepareSamples(font, features)` → `Map<tag, FeatureSample>`; dispatches
     each feature (see "Dispatch" below); builds `locl` per-language samples.
   - `pick.ts` — choose real words covering affected chars (`pickSample`,
     `pickLigatureSample`), `classifyScript`.
-  - `languages.ts` — language metadata + OT-tag↔BCP-47, lazy `import.meta.glob` of
-    `wordlists/*.json`.
+  - `languages.ts` — `LanguageInfo[]` (OT-lang tag ↔ name ↔ BCP-47 ↔ wordlist
+    `code`, per script), lazy `import.meta.glob` of `wordlists/*.json`. Used
+    only for `locl` matching + word sourcing.
   - `wordlists/` — bundled FrequencyWords (MIT), trimmed per language.
 - `src/render/` — `featureSettings.ts` (before/after `font-feature-settings`),
-  `Preview.tsx`, `LoclPreview.tsx`, `highlight.tsx` (mark affected chars).
-- `src/ui/` — `DropZone`, `Header`, `Controls`, `FeatureList`, `FeatureCard`,
-  `AffectedGlyphs` (full inventory), `CombinationExplorer`.
+  `Preview.tsx`, `LoclPreview.tsx` (per-language cells + localized-forms
+  inventory), `highlight.tsx` (mark affected chars).
+- `src/ui/` — `DropZone`, `Header`, `Controls` (sticky bar; hosts `FeatureNav`
+  + publishes `--scroll-offset`), `FeatureNav` (jump-list), `FeatureList`,
+  `FeatureCard`, `AffectedGlyphs` (full inventory), `AltGrid` (alternates),
+  `ContextualExamples`, `CombinationExplorer`, `OrphanGlyphs` (unreachable).
 - `src/App.tsx` — state + layout.
 
 ## Conventions & hard-won gotchas
@@ -65,14 +76,28 @@ npx tsc --noEmit # type-check only
   (no default export).
 - **Dispatch previews by ACTUAL lookup type, not by tag.** Fonts implement the same
   feature with different lookups (e.g. `dlig` as type-1 decorative alts; `ordn` as a
-  type-4 ligature `No`→№). Rule in `samples/index.ts`: locl/case special → figure
-  templates → type-4 ⇒ ligature → type-1 ⇒ single → else (contextual) no preview.
+  type-4 ligature `No`→№). Rule in `samples/index.ts`: locl → aalt/salt
+  (alternates grid) → case → figure templates → collect contextual (type 5/6)
+  examples → type-4 ⇒ ligature (or cascade) → type-1 ⇒ cascade/single → else
+  (contextual-only) examples. A feature can mix kinds, so examples are gathered
+  alongside the primary ligature/single preview.
 - **Lookup application order = LookupList index order** (ascending), NOT feature
   order (per the OpenType spec). Combinations sort feature toggles by min lookup
   index; the browser shaper applies enabled features correctly.
 - **`locl` is language-driven**, not toggled by `font-feature-settings`. Proof each
   language with `font-language-override: "TAG"` (+ `lang`). Confirmed to switch
-  glyphs in Chromium.
+  glyphs in Chromium. Each language shows a real-word proof AND a **full
+  default→localized inventory** of every input char it substitutes — a picked
+  word covers only a few forms (Bulgarian alone localizes ~27 letters). The
+  inventory is skipped only for coverage-string samples (the word already lists
+  every form). See `LoclPreview` / `buildLoclSample`.
+- **Naming locl languages: extend `languages.ts`.** An unmatched OT-lang tag
+  falls back to showing the bare tag (e.g. `BSH`) with no native words. To audit
+  which tags a font (or `test_fonts/`) gates `locl` with, dump LangSys tags via
+  fonttools and cross-ref `LANGUAGES`. Entries without a `wordlists/<code>.json`
+  still resolve a name + BCP-47 (words fall back to the script bank). The same
+  OT tag can appear under multiple scripts (e.g. `SRB` latn + cyrl) — add an
+  entry per script.
 - **Ligature before/after is isolated**: `before` disables ALL ligature features so
   components show separately; `after` enables only the target (standard liga/clig
   are default-on and would otherwise ligate identically on both sides). See
@@ -89,6 +114,25 @@ npx tsc --noEmit # type-check only
   ligature/single primary — features mix lookup kinds.
 - **Default-on/off matters**: default-off → before = baseline, after = `"tag" 1`;
   default-on → before = `"tag" 0`, after = `"tag" 1`.
+- **Sticky nav scroll offset.** The feature navigator lives in the sticky
+  `Controls` bar; it measures its own height (ResizeObserver) into the
+  `--scroll-offset` CSS var. Every jump target (`FeatureCard`,
+  `CombinationExplorer`, `OrphanGlyphs`) sets `scroll-margin-top:
+  var(--scroll-offset)` so a jumped-to heading lands just below the bar instead
+  of hiding under it. Anchor ids: `featureAnchorId(feature)`,
+  `feature-combinations`, `unreachable-glyphs`.
+
+## Deploy
+
+`./deploy.sh` builds (`base: '/fea-proof/'`, set only for `command === 'build'`
+in `vite.config.ts` — dev stays at `/`), copies `dist/` into the sibling
+`typedev.github.io/fea-proof/` repo, then commits & pushes it. Live at
+`https://typedev.github.io/fea-proof/`. **Verify a prod build with a plain
+static server** (lay `dist` out as `<dir>/fea-proof/` and `python3 -m
+http.server`), NOT `npm run preview` — vite preview 404s requests carrying
+`Sec-Fetch-Dest: script` (the header Chromium sends for module scripts), so the
+app won't load in a browser even though curl gets 200. GitHub Pages doesn't do
+this. Push only on the user's explicit request.
 
 ## Test fonts
 
@@ -108,6 +152,9 @@ up source edits, or the probe runs stale code.
 
 ## Deferred (future)
 
-- More scripts (Arabic/Indic/Hebrew); visual design pass. (Alternate features
-  aalt & salt are done — `ui/AltGrid.tsx`, rendered via
-  `font-feature-settings: "<tag>" N`.)
+- More scripts (Arabic/Indic/Hebrew); visual design pass.
+- Cyrillic variants of the Turkic locl langs (AZE/KAZ/TAT/CRT are added under
+  `latn` only — a font gating their Cyrillic `locl` would show the bare tag).
+
+Done already: alternates (`ui/AltGrid.tsx`, `font-feature-settings: "<tag>" N`);
+full per-language `locl` inventory; sticky feature navigator; GitHub Pages deploy.
