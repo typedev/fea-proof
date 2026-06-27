@@ -126,7 +126,9 @@ export function FeatureCard({
                 highlightRanges={sample.highlightRanges}
                 settings={sample.kind === 'ligature' ? ligatureBeforeAfter(feature.tag) : sample.settings}
                 labels={
-                  sample.kind === 'ligature' ? { before: 'no ligatures', after: feature.tag } : undefined
+                  sample.kind === 'ligature'
+                    ? { before: 'no ligatures', after: feature.tag }
+                    : sample.labels
                 }
               />
               {sample.usedCoverage && (

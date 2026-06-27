@@ -47,6 +47,8 @@ export type FeatureSample =
       examples?: ContextualExample[]
       /** Note shown under the preview, e.g. a figure feature that's inert here. */
       note?: string
+      /** Cell labels override — cascades name the active producer context. */
+      labels?: { before: string; after: string }
     }
   | { tag: string; kind: 'locl'; languages: LoclLanguageSample[] }
   | { tag: string; kind: 'alternates'; alternates: { char: string; indices: number[] }[] }
@@ -314,6 +316,7 @@ function buildCascadeSample(
     affected: fragments,
     highlightRanges: shapingHighlight(shaper, text, { features: before }, { features: after }, undefined, false),
     settings: { before: toCss(before), after: toCss(after) },
+    labels: cascadeLabels([...producers], feature.tag),
   }
 }
 
@@ -326,6 +329,17 @@ function toCss(features: string[]): string {
       return `"${tag}" ${value}`
     })
     .join(', ')
+}
+
+/**
+ * Cell labels for a cascade proof. The "before" cell keeps the producer
+ * feature(s) on (the target has nothing to act on without them), so a bare
+ * "default" label would lie — name the actual context instead, e.g.
+ * `dlig` → `dlig + ss03`, or `numr + dnom` → `numr + dnom + frac`.
+ */
+function cascadeLabels(producers: string[], tag: string): { before: string; after: string } {
+  const ctx = [...new Set(producers)].sort().join(' + ')
+  return ctx ? { before: ctx, after: `${ctx} + ${tag}` } : { before: 'default', after: tag }
 }
 
 /**
@@ -487,6 +501,7 @@ export async function prepareSamples(
           affected: seqs,
           highlightRanges: shapingHighlight(shaper, text, { features: before }, { features: after }, undefined, false),
           settings: { before: toCss(before), after: toCss(after) },
+          labels: cascadeLabels(producers, feature.tag),
         }
         if (examples.length > 0) sample.examples = examples
         result.set(feature.tag, sample)
