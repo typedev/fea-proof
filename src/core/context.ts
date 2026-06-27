@@ -231,8 +231,11 @@ export function deriveTriggers(
   const lookupIndexes = new Set<number>()
   for (const occ of feature.occurrences) for (const li of occ.lookupIndexes) lookupIndexes.add(li)
 
-  const triggers: Trigger[] = []
-  const seenText = new Set<string>()
+  // Dedup by a canonical form that collapses runs of an identical char, so fonts
+  // with one rule per repetition length (common for frac matching 1..N digit
+  // runs → "/0/", "/00/", … "/0000000000/") yield a single representative trigger.
+  const collapse = (s: string) => s.replace(/(.)\1+/gu, '$1')
+  const byKey = new Map<string, Trigger>()
 
   for (const li of lookupIndexes) {
     const lookup = lookups[li]
@@ -247,15 +250,17 @@ export function deriveTriggers(
         if (resolved.some((r) => !r)) continue
 
         const text = resolved.map((r) => r!.chars).join('')
-        if (!text || seenText.has(text)) continue
-        seenText.add(text)
+        if (!text) continue
+        const key = collapse(text)
+        const existing = byKey.get(key)
+        if (existing && existing.text.length <= text.length) continue
 
         const required = new Set<string>()
         for (const r of resolved) for (const f of r!.features) if (f !== feature.tag) required.add(f)
-        triggers.push({ text, requiredFeatures: [...required] })
-        if (triggers.length >= 200) return triggers
+        byKey.set(key, { text, requiredFeatures: [...required] })
+        if (byKey.size >= 200) return [...byKey.values()]
       }
     }
   }
-  return triggers
+  return [...byKey.values()]
 }

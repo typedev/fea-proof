@@ -63,8 +63,11 @@ const FIGURE_TEMPLATES: Record<string, string> = {
   pnum: '0123456789  1 11 111',
   tnum: '0123456789  1 11 111',
   zero: '0 100 1,050.08',
-  frac: '1/2  3/4  5/8  21/100',
-  afrc: '1/2  3/4  5/8',
+  // Numerator/denominator pairs that have precomposed Unicode vulgar fractions
+  // (½ ⅓ ⅔ ¼ ¾ ⅕…⅞ ⅐ ⅑ ⅒) — shows which the font actually builds — plus an
+  // arbitrary 21/100 to prove it composes fractions beyond the canned set.
+  frac: '1/2 1/3 2/3 1/4 3/4 1/5 2/5 3/5 4/5 1/6 5/6 1/7 1/8 3/8 5/8 7/8 1/9 1/10 21/100',
+  afrc: '1/2 1/3 2/3 1/4 3/4 1/5 2/5 3/5 4/5 1/6 5/6 1/7 1/8 3/8 5/8 7/8 1/9 1/10 21/100',
   numr: '0123456789',
   dnom: '0123456789',
 }
