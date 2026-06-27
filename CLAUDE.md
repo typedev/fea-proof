@@ -80,9 +80,11 @@ npx tsc --noEmit # type-check only
   ratio-gated for single/locl (skip when ~everything changes), exempt for
   ligatures. Degrades gracefully (no highlight) if the wasm fails to load.
 - **Contextual features** (calt, context swashes): triggers are derived
-  analytically from the lookup coverage (`context.ts`), non-cmapped context glyphs
-  resolved via the substitution graph (`substitution.ts`); the best trigger is
-  confirmed by shaping. No brute-force.
+  analytically from the lookup rules (`context.ts`, all subtable Formats 1/2/3),
+  non-cmapped context glyphs resolved via the substitution graph
+  (`substitution.ts`); confirmed by shaping. No brute-force. A feature shows ALL
+  its contextual substitutions (one example per rule), alongside any
+  ligature/single primary — features mix lookup kinds.
 - **Default-on/off matters**: default-off → before = baseline, after = `"tag" 1`;
   default-on → before = `"tag" 0`, after = `"tag" 1`.
 
@@ -106,5 +108,4 @@ up source edits, or the probe runs stale code.
 
 - True cross-feature cascades via shaping (stage D of the HarfBuzz plan — deferred;
   the combinations explorer already covers the main case).
-- Contextual lookup Formats 1/2 in `context.ts` (only Format 3 handled).
 - `aalt`/`salt` alternates grid; more scripts; visual design pass.
