@@ -2,13 +2,15 @@ import { useState, type CSSProperties } from 'react'
 
 const INITIAL = 40
 
-/** aalt: each base glyph (default, muted) followed by its alternates. */
+/** Alternate features (aalt/salt): each base glyph (default, muted) + its alternates. */
 export function AltGrid({
   cssFamily,
+  tag,
   alternates,
   size = 30,
 }: {
   cssFamily: string
+  tag: string
   alternates: { char: string; indices: number[] }[]
   size?: number
 }) {
@@ -18,7 +20,7 @@ export function AltGrid({
   const glyph = (k: number): CSSProperties => ({
     fontFamily: family,
     fontSize: Math.min(size, 32),
-    fontFeatureSettings: `"aalt" ${k}`,
+    fontFeatureSettings: `"${tag}" ${k}`,
   })
 
   return (

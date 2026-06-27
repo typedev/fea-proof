@@ -100,9 +100,9 @@ export function FeatureCard({
         <div className="mt-3">
           <LoclPreview cssFamily={cssFamily} languages={sample.languages} size={size} />
         </div>
-      ) : sample.kind === 'aalt' ? (
+      ) : sample.kind === 'alternates' ? (
         <div className="mt-3">
-          <AltGrid cssFamily={cssFamily} alternates={sample.alternates} size={size} />
+          <AltGrid cssFamily={cssFamily} tag={feature.tag} alternates={sample.alternates} size={size} />
         </div>
       ) : (
         <div className="mt-3 space-y-3">

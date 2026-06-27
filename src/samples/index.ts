@@ -45,7 +45,7 @@ export type FeatureSample =
       examples?: ContextualExample[]
     }
   | { tag: string; kind: 'locl'; languages: LoclLanguageSample[] }
-  | { tag: string; kind: 'aalt'; alternates: { char: string; indices: number[] }[] }
+  | { tag: string; kind: 'alternates'; alternates: { char: string; indices: number[] }[] }
 
 // Handled specially (locl, case, aalt) or intentionally not proofed here:
 //  - ccmp: glyph composition/decomposition, usually invisible
@@ -185,12 +185,12 @@ interface AaltLookup {
 }
 
 /**
- * aalt (Access All Alternates): for each base glyph, the set of alternates. We
- * render each alternate via CSS `font-feature-settings: "aalt" N`. Count the
- * alternates per character from the type 1/3 lookups, then (if a shaper is
- * available) confirm which N values yield distinct glyphs.
+ * Alternate features (aalt, salt): for each base glyph, the set of alternates,
+ * rendered via CSS `font-feature-settings: "<tag>" N`. Count alternates per
+ * character from the type 1/3 lookups, then (if a shaper is available) confirm
+ * which N values yield distinct glyphs.
  */
-function buildAaltSample(
+function buildAlternatesSample(
   font: Font,
   feature: FeatureInfo,
   reverse: Map<number, number[]>,
@@ -226,11 +226,11 @@ function buildAaltSample(
     if (count < 1) continue
     let indices: number[]
     if (shaper) {
-      const def = shaper.shape(char, { features: ['aalt=0'] })[0]?.g
+      const def = shaper.shape(char, { features: [`${feature.tag}=0`] })[0]?.g
       const seen = new Set<number>([def ?? -1])
       indices = []
       for (let k = 1; k <= count; k++) {
-        const g = shaper.shape(char, { features: [`aalt=${k}`] })[0]?.g
+        const g = shaper.shape(char, { features: [`${feature.tag}=${k}`] })[0]?.g
         if (g != null && !seen.has(g)) {
           seen.add(g)
           indices.push(k)
@@ -244,7 +244,7 @@ function buildAaltSample(
   if (alternates.length === 0) return null
 
   alternates.sort((a, b) => a.char.codePointAt(0)! - b.char.codePointAt(0)!)
-  return { tag: feature.tag, kind: 'aalt', alternates }
+  return { tag: feature.tag, kind: 'alternates', alternates }
 }
 
 /** Hb feature strings → CSS font-feature-settings ("calt=0" → `"calt" 0`). */
@@ -324,9 +324,13 @@ export async function prepareSamples(
       continue
     }
 
-    if (feature.tag === 'aalt' && feature.tables.includes('GSUB') && !feature.ignored) {
-      const aalt = buildAaltSample(font, feature, reverse, shaper)
-      if (aalt) result.set(feature.tag, aalt)
+    if (
+      (feature.tag === 'aalt' || feature.tag === 'salt') &&
+      feature.tables.includes('GSUB') &&
+      !feature.ignored
+    ) {
+      const alts = buildAlternatesSample(font, feature, reverse, shaper)
+      if (alts) result.set(feature.tag, alts)
       continue
     }
 
