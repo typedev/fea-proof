@@ -408,17 +408,21 @@ export async function prepareSamples(
     if (!feature.tables.includes('GSUB') || feature.ignored || SKIP.has(feature.tag)) continue
 
     // Figure features: fixed numeric template (their inputs are often non-cmapped).
+    // But only if the template actually exercises the feature — some fonts build
+    // e.g. frac from pre-formed glyphs, not raw "1/2" text; there we fall through
+    // to derive the real content from the feature's lookups.
     if (FIGURE_TEMPLATES[feature.tag]) {
+      const template = FIGURE_TEMPLATES[feature.tag]
       const { before, after } = beforeAfterFeatures(feature.tag, feature.defaultOn)
-      pending.push({
-        tag: feature.tag,
-        kind: 'single',
-        text: FIGURE_TEMPLATES[feature.tag],
-        affected: [],
-        before,
-        after,
-      })
-      continue
+      const works =
+        !shaper ||
+        shaper.shape(template, { features: before }).map((g) => g.g).join() !==
+          shaper.shape(template, { features: after }).map((g) => g.g).join()
+      if (works) {
+        pending.push({ tag: feature.tag, kind: 'single', text: template, affected: [], before, after })
+        continue
+      }
+      // else: template doesn't trigger it → fall through to the dispatch below.
     }
 
     // Dispatch by ACTUAL lookup types, not by tag (fonts vary). A feature can mix
@@ -431,8 +435,29 @@ export async function prepareSamples(
         : []
     let handled = false
     if (types.includes(4)) {
-      const sequences = reconstructLigatures(font, feature, reverse)
-      if (sequences.length > 0) {
+      const { sequences, producers } = reconstructLigatures(font, feature, reverse, graph)
+      if (sequences.length > 0 && producers.length > 0) {
+        // Cascade-ligature: components are produced by other features (e.g. frac
+        // ligating aalt-made digit forms). Enable producers, then toggle target —
+        // proof on the real base sequences, not a hard-coded fraction template.
+        const on = producers.map((p) => `${p}=1`)
+        const before = [...on, ...(feature.defaultOn ? [`${feature.tag}=0`] : [])]
+        const after = [...on, `${feature.tag}=1`]
+        const text = sequences.slice(0, 16).join('  ')
+        const sample: FeatureSample = {
+          tag: feature.tag,
+          kind: 'single',
+          text,
+          usedCoverage: false,
+          affected: sequences,
+          highlightRanges: shapingHighlight(shaper, text, { features: before }, { features: after }, undefined, false),
+          settings: { before: toCss(before), after: toCss(after) },
+        }
+        if (examples.length > 0) sample.examples = examples
+        result.set(feature.tag, sample)
+        noteScripts(sequences.map((s) => s[0]))
+        handled = true
+      } else if (sequences.length > 0) {
         const { before, after } = ligatureFeatures(feature.tag)
         pending.push({ tag: feature.tag, kind: 'ligature', sequences, affected: sequences, before, after, examples })
         noteScripts(sequences.map((s) => s[0]))

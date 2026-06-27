@@ -26,7 +26,7 @@ export interface CombinationGroup {
 const EXCLUDE = new Set(['aalt', 'salt', 'ccmp', 'locl'])
 
 const DIGITS = '0123456789'.split('')
-const FIGURE_TAGS = new Set(['onum', 'lnum', 'pnum', 'tnum', 'dnom', 'numr', 'afrc', 'frac', 'zero'])
+const FIGURE_TAGS = new Set(['onum', 'lnum', 'pnum', 'tnum', 'dnom', 'numr', 'zero'])
 
 const NOT_DISPLAYABLE = /[\p{M}\p{Cf}\p{Cc}\s]/u
 const MAX_FRAGMENTS_PER_GROUP = 24
@@ -91,7 +91,14 @@ export function findCombinations(
     for (const occ of feature.occurrences) for (const li of occ.lookupIndexes) lookupIndexes.add(li)
 
     if (feature.gsubLookupTypes.includes(4)) {
-      for (const seq of reconstructLigatures(font, feature, reverse)) credit(feature.tag, seq)
+      const { sequences, producers } = reconstructLigatures(font, feature, reverse, graph)
+      for (const seq of sequences) {
+        credit(feature.tag, seq)
+        for (const p of producers) {
+          ensureOrder(p)
+          credit(p, seq)
+        }
+      }
     }
     if (feature.gsubLookupTypes.includes(1)) {
       for (const g of inputGlyphsForLookups(font, lookupIndexes)) {
