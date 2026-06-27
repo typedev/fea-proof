@@ -2,6 +2,11 @@
 
 A web tool that shows what a font's OpenType features actually do — on **real words**.
 
+**▶ Live:** [typedev.github.io/fea-proof](https://typedev.github.io/fea-proof/)
+
+This is the development repository. To run it locally or host your own copy, see
+[Run locally](#run-locally) and [Build & host](#build--host).
+
 Drop a font (`.otf` / `.ttf` / `.woff` / `.woff2`) and it introspects the font's
 GSUB/GPOS features, works out which glyphs each feature affects, and renders a
 **before / after** proof for every feature using realistic sample text in the
