@@ -21,6 +21,7 @@ export function AffectedGlyphs({
   affected,
   size = 26,
   isLigature = false,
+  settings,
 }: {
   cssFamily: string
   tag: string
@@ -28,8 +29,10 @@ export function AffectedGlyphs({
   affected: string[]
   size?: number
   isLigature?: boolean
+  settings?: { before: string; after: string }
 }) {
-  const { before, after } = isLigature ? ligatureBeforeAfter(tag) : beforeAfterSettings(tag, defaultOn)
+  const { before, after } =
+    settings ?? (isLigature ? ligatureBeforeAfter(tag) : beforeAfterSettings(tag, defaultOn))
   const family = `"${cssFamily}", system-ui`
   const glyphSize = Math.min(size, 30)
 

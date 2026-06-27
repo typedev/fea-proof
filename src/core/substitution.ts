@@ -26,6 +26,9 @@ export function buildSubstGraph(font: Font, features: FeatureInfo[]): SubstGraph
 
   const lookupFeatures = new Map<number, string[]>()
   for (const f of features) {
+    // Only GSUB features index into the GSUB lookup list (occurrences of a
+    // GPOS-only feature like kern are GPOS indices — would mislabel GSUB lookups).
+    if (!f.tables.includes('GSUB')) continue
     for (const occ of f.occurrences) {
       for (const li of occ.lookupIndexes) {
         const arr = lookupFeatures.get(li) ?? lookupFeatures.set(li, []).get(li)!
@@ -72,38 +75,68 @@ export interface ResolvedGlyph {
   features: string[]
 }
 
+export interface ResolveOptions {
+  /** Don't credit this feature as a producer (it's the one being previewed). */
+  excludeTag?: string
+  /**
+   * Prefer tracing through a producing feature over the glyph's own cmap entry.
+   * Use for "derived" glyphs that happen to be cmapped (e.g. PUA-encoded
+   * ligatures consumed by a stylistic set) so they resolve to readable bases.
+   */
+  preferProduced?: boolean
+}
+
 /**
- * Resolve a glyph id to base characters: directly via the inverted cmap, or — for
- * non-cmapped glyphs (alternates produced by earlier lookups, e.g. a contextual
- * feature's input) — by tracing the substitution graph back to cmapped inputs and
- * recording which features produce it.
+ * Resolve a glyph id to base characters: via the inverted cmap, or — for glyphs
+ * produced by earlier lookups (alternates / PUA-encoded ligatures) — by tracing
+ * the substitution graph back to cmapped inputs, recording the producer features.
  */
 export function resolveGlyph(
   gid: number,
   reverse: Map<number, number[]>,
   graph: SubstGraph,
+  opts: ResolveOptions = {},
   seen: Set<number> = new Set(),
   depth = 0,
 ): ResolvedGlyph | null {
   const cps = reverse.get(gid)
-  if (cps && cps.length) return { chars: String.fromCodePoint(cps[0]), features: [] }
-  if (depth > 6 || seen.has(gid)) return null
-  seen.add(gid)
+  const cmap: ResolvedGlyph | null = cps && cps.length ? { chars: String.fromCodePoint(cps[0]), features: [] } : null
 
-  for (const production of graph.producedBy.get(gid) ?? []) {
-    let chars = ''
-    const features = new Set(graph.lookupFeatures.get(production.lookupIndex) ?? [])
-    let ok = true
-    for (const input of production.inputs) {
-      const r = resolveGlyph(input, reverse, graph, seen, depth + 1)
-      if (!r) {
-        ok = false
-        break
+  const trace = (): ResolvedGlyph | null => {
+    if (depth > 6 || seen.has(gid)) return null
+    seen.add(gid)
+    for (const production of graph.producedBy.get(gid) ?? []) {
+      const producerFeats = (graph.lookupFeatures.get(production.lookupIndex) ?? []).filter(
+        (t) => t !== opts.excludeTag,
+      )
+      let chars = ''
+      const features = new Set(producerFeats)
+      let ok = true
+      for (const input of production.inputs) {
+        const r = resolveGlyph(input, reverse, graph, opts, seen, depth + 1)
+        if (!r) {
+          ok = false
+          break
+        }
+        chars += r.chars
+        for (const f of r.features) features.add(f)
       }
-      chars += r.chars
-      for (const f of r.features) features.add(f)
+      if (ok) return { chars, features: [...features] }
     }
-    if (ok) return { chars, features: [...features] }
+    return null
   }
-  return null
+
+  if (opts.preferProduced) {
+    // Trace when produced by a different feature; otherwise fall back to cmap.
+    const hasOtherProducer = (graph.producedBy.get(gid) ?? []).some((p) =>
+      (graph.lookupFeatures.get(p.lookupIndex) ?? []).some((t) => t !== opts.excludeTag),
+    )
+    if (hasOtherProducer) {
+      const traced = trace()
+      if (traced) return traced
+    }
+    return cmap
+  }
+
+  return cmap ?? trace()
 }

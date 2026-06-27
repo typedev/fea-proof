@@ -1,10 +1,10 @@
 import type { Font } from 'opentype.js'
 import type { FeatureInfo } from '../core/types'
 import { buildReverseCmap, coverageGlyphs, resolveLookup } from '../core/glyphs'
-import { affectedInputChars, inputCharsForLookups } from '../core/features/single'
+import { affectedInputChars, inputCharsForLookups, inputGlyphsForLookups } from '../core/features/single'
 import { reconstructLigatures } from '../core/features/ligature'
 import { changedRanges, type Shaper, type ShapeVariant } from '../core/shape'
-import { buildSubstGraph } from '../core/substitution'
+import { buildSubstGraph, resolveGlyph } from '../core/substitution'
 import { deriveTriggers } from '../core/context'
 import { beforeAfterFeatures, ligatureFeatures } from '../render/featureSettings'
 import { classifyScript, pickSample, pickLigatureSample } from './pick'
@@ -247,6 +247,57 @@ function buildAlternatesSample(
   return { tag: feature.tag, kind: 'alternates', alternates }
 }
 
+/**
+ * Cross-feature cascade: a single-sub feature whose inputs are glyphs produced by
+ * ANOTHER feature (e.g. a stylistic set that restyles dlig ligatures, often
+ * PUA-encoded). Trace those inputs back to base characters + the producer
+ * feature(s), and proof as [producers on] → [producers on + target on], so the
+ * sample is readable (base letters) and shows the real cascade.
+ */
+function buildCascadeSample(
+  font: Font,
+  feature: FeatureInfo,
+  reverse: Map<number, number[]>,
+  graph: ReturnType<typeof buildSubstGraph>,
+  shaper?: Shaper,
+): FeatureSample | null {
+  const lookupIndexes = new Set<number>()
+  for (const occ of feature.occurrences) for (const li of occ.lookupIndexes) lookupIndexes.add(li)
+  const gids = inputGlyphsForLookups(font, lookupIndexes)
+  if (gids.length === 0) return null
+
+  const fragments: string[] = []
+  const seen = new Set<string>()
+  const producers = new Set<string>()
+  let derived = 0
+  for (const g of gids) {
+    const r = resolveGlyph(g, reverse, graph, { preferProduced: true, excludeTag: feature.tag })
+    if (!r || r.features.length === 0) continue
+    derived++
+    r.features.forEach((f) => producers.add(f))
+    if (!seen.has(r.chars) && !NOT_DISPLAYABLE.test(r.chars)) {
+      seen.add(r.chars)
+      fragments.push(r.chars)
+    }
+  }
+  // Only treat as a cascade when most inputs are derived (not a normal single-sub).
+  if (producers.size === 0 || fragments.length === 0 || derived / gids.length < 0.5) return null
+
+  const on = [...producers].map((p) => `${p}=1`)
+  const before = [...on, ...(feature.defaultOn ? [`${feature.tag}=0`] : [])]
+  const after = [...on, `${feature.tag}=1`]
+  const text = fragments.slice(0, 16).join('  ')
+  return {
+    tag: feature.tag,
+    kind: 'single',
+    text,
+    usedCoverage: false,
+    affected: fragments,
+    highlightRanges: shapingHighlight(shaper, text, { features: before }, { features: after }, undefined, false),
+    settings: { before: toCss(before), after: toCss(after) },
+  }
+}
+
 /** Hb feature strings → CSS font-feature-settings ("calt=0" → `"calt" 0`). */
 function toCss(features: string[]): string {
   if (features.length === 0) return 'normal'
@@ -389,12 +440,22 @@ export async function prepareSamples(
       }
     }
     if (!handled && types.includes(1)) {
-      const chars = affectedInputChars(font, feature, reverse)
-      if (chars.length > 0) {
-        const { before, after } = beforeAfterFeatures(feature.tag, feature.defaultOn)
-        pending.push({ tag: feature.tag, kind: 'single', chars, affected: chars, before, after, examples })
-        noteScripts(chars)
+      // Cross-feature cascade: inputs are glyphs another feature produces.
+      const cascade = buildCascadeSample(font, feature, reverse, graph, shaper)
+      if (cascade) {
+        if (examples.length > 0 && cascade.kind !== 'locl' && cascade.kind !== 'alternates') {
+          cascade.examples = examples
+        }
+        result.set(feature.tag, cascade)
         handled = true
+      } else {
+        const chars = affectedInputChars(font, feature, reverse)
+        if (chars.length > 0) {
+          const { before, after } = beforeAfterFeatures(feature.tag, feature.defaultOn)
+          pending.push({ tag: feature.tag, kind: 'single', chars, affected: chars, before, after, examples })
+          noteScripts(chars)
+          handled = true
+        }
       }
     }
     if (!handled && examples.length > 0) {

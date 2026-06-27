@@ -143,6 +143,7 @@ export function FeatureCard({
                       affected={sample.affected}
                       size={size}
                       isLigature={sample.kind === 'ligature'}
+                      settings={sample.settings}
                     />
                   )}
                 </>
