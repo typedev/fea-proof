@@ -24,13 +24,29 @@ export const LANGUAGES: LanguageInfo[] = [
   { code: 'ro', name: 'Romanian', script: 'latn', bcp47: 'ro', otTags: ['ROM', 'MOL'] },
   { code: 'hu', name: 'Hungarian', script: 'latn', bcp47: 'hu', otTags: ['HUN'] },
   { code: 'sr', name: 'Serbian (Latin)', script: 'latn', bcp47: 'sr-Latn', otTags: ['SRB'] },
+  { code: 'ca', name: 'Catalan', script: 'latn', bcp47: 'ca', otTags: ['CAT'] },
+  { code: 'tr', name: 'Turkish', script: 'latn', bcp47: 'tr', otTags: ['TRK'] },
+  { code: 'az', name: 'Azerbaijani', script: 'latn', bcp47: 'az', otTags: ['AZE'] },
+  { code: 'crh', name: 'Crimean Tatar', script: 'latn', bcp47: 'crh', otTags: ['CRT'] },
+  { code: 'kk-Latn', name: 'Kazakh (Latin)', script: 'latn', bcp47: 'kk-Latn', otTags: ['KAZ'] },
+  { code: 'tt-Latn', name: 'Tatar (Latin)', script: 'latn', bcp47: 'tt-Latn', otTags: ['TAT'] },
+  { code: 'se', name: 'Northern Sami', script: 'latn', bcp47: 'se', otTags: ['NSM'] },
+  { code: 'sms', name: 'Skolt Sami', script: 'latn', bcp47: 'sms', otTags: ['SKS'] },
+  { code: 'la', name: 'Latin', script: 'latn', bcp47: 'la', otTags: ['LAT'] },
   { code: 'ru', name: 'Russian', script: 'cyrl', bcp47: 'ru', otTags: ['RUS'] },
   { code: 'uk', name: 'Ukrainian', script: 'cyrl', bcp47: 'uk', otTags: ['UKR'] },
   { code: 'bg', name: 'Bulgarian', script: 'cyrl', bcp47: 'bg', otTags: ['BGR'] },
   { code: 'mk', name: 'Macedonian', script: 'cyrl', bcp47: 'mk', otTags: ['MKD'] },
   { code: 'sr-Cyrl', name: 'Serbian (Cyrillic)', script: 'cyrl', bcp47: 'sr-Cyrl', otTags: ['SRB'] },
+  { code: 'ba', name: 'Bashkir', script: 'cyrl', bcp47: 'ba', otTags: ['BSH'] },
+  { code: 'cu', name: 'Church Slavonic', script: 'cyrl', bcp47: 'cu', otTags: ['CHU'] },
   { code: 'el', name: 'Greek', script: 'grek', bcp47: 'el', otTags: ['ELL'] },
 ]
+
+// NOTE: `code` doubles as the wordlist key. Entries above without a
+// matching wordlists/<code>.json (e.g. Turkic/Sami langs) still resolve a
+// human name + BCP-47 for locl; sample words fall back to the script's
+// general word bank, and the localized-forms inventory shows the full set.
 
 /** Languages used (in priority order) to source words for each script. */
 export const PICK_LANGS: Record<Script, string[]> = {
