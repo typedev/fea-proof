@@ -6,7 +6,7 @@ import { reconstructLigatures } from '../core/features/ligature'
 import { changedRanges, type Shaper, type ShapeVariant } from '../core/shape'
 import { buildSubstGraph, resolveGlyph, isPUA } from '../core/substitution'
 import { deriveTriggers } from '../core/context'
-import { beforeAfterFeatures, ligatureFeatures } from '../render/featureSettings'
+import { beforeAfterFeatures, ligatureFeatures, figureBeforeAfter, figureFeatures } from '../render/featureSettings'
 import { classifyScript, pickSample, pickLigatureSample } from './pick'
 import { LANGUAGES, loadWordlist, loadWordBank, type LanguageInfo, type Script } from './languages'
 
@@ -45,6 +45,8 @@ export type FeatureSample =
       settings?: { before: string; after: string }
       /** Contextual substitution examples (one per derived trigger). */
       examples?: ContextualExample[]
+      /** Note shown under the preview, e.g. a figure feature that's inert here. */
+      note?: string
     }
   | { tag: string; kind: 'locl'; languages: LoclLanguageSample[] }
   | { tag: string; kind: 'alternates'; alternates: { char: string; indices: number[] }[] }
@@ -124,6 +126,10 @@ interface Pending {
   before: string[]
   after: string[]
   examples?: ContextualExample[]
+  /** Explicit CSS font-feature-settings (figure isolation). */
+  settings?: { before: string; after: string }
+  /** Note under the preview (e.g. inert figure feature). */
+  note?: string
 }
 
 /** Build the per-language samples for the locl feature. */
@@ -284,7 +290,11 @@ function buildCascadeSample(
     if (cps && cps.some((cp) => !isPUA(cp))) return null
     const r = resolveGlyph(g, reverse, graph, { preferProduced: true, excludeTag: feature.tag })
     if (!r || r.features.length === 0) continue
-    r.features.forEach((f) => producers.add(f))
+    // aalt/salt are catch-all alternate features — enabling them as a "producer"
+    // mass-substitutes arbitrary first-alternates, so never treat them as context.
+    const feats = r.features.filter((f) => f !== 'aalt' && f !== 'salt')
+    if (feats.length === 0) continue
+    feats.forEach((f) => producers.add(f))
     if (!seen.has(r.chars) && !NOT_DISPLAYABLE.test(r.chars)) {
       seen.add(r.chars)
       fragments.push(r.chars)
@@ -416,22 +426,31 @@ export async function prepareSamples(
 
     if (!feature.tables.includes('GSUB') || feature.ignored || SKIP.has(feature.tag)) continue
 
-    // Figure features: fixed numeric template (their inputs are often non-cmapped).
-    // But only if the template actually exercises the feature — some fonts build
-    // e.g. frac from pre-formed glyphs, not raw "1/2" text; there we fall through
-    // to derive the real content from the feature's lookups.
+    // Figure features: fixed numeric template, proofed in ISOLATION — every other
+    // figure-style/width/position feature (and aalt/salt) is turned off so the
+    // "before" is the font's nominal figures and "after" toggles only this one.
+    // Without isolation a sibling (or the aalt catch-all) leaks into "default".
+    // These are always handled here, never via the cascade path; if the isolated
+    // toggle changes nothing (e.g. lnum on an already-lining font) the proof is
+    // honestly identical, flagged inert for a note.
     if (FIGURE_TEMPLATES[feature.tag]) {
       const template = FIGURE_TEMPLATES[feature.tag]
-      const { before, after } = beforeAfterFeatures(feature.tag, feature.defaultOn)
-      const works =
-        !shaper ||
-        shaper.shape(template, { features: before }).map((g) => g.g).join() !==
+      const { before, after } = figureFeatures(feature.tag)
+      const inert =
+        !!shaper &&
+        shaper.shape(template, { features: before }).map((g) => g.g).join() ===
           shaper.shape(template, { features: after }).map((g) => g.g).join()
-      if (works) {
-        pending.push({ tag: feature.tag, kind: 'single', text: template, affected: [], before, after })
-        continue
-      }
-      // else: template doesn't trigger it → fall through to the dispatch below.
+      pending.push({
+        tag: feature.tag,
+        kind: 'single',
+        text: template,
+        affected: [],
+        before,
+        after,
+        settings: figureBeforeAfter(feature.tag),
+        note: inert ? "no effect on this font's default figures" : undefined,
+      })
+      continue
     }
 
     // Dispatch by ACTUAL lookup types, not by tag (fonts vary). A feature can mix
@@ -536,6 +555,8 @@ export async function prepareSamples(
         item.kind !== 'ligature', // ligatures: don't gate by ratio
       ),
       examples: item.examples && item.examples.length > 0 ? item.examples : undefined,
+      settings: item.settings,
+      note: item.note,
     })
   }
 

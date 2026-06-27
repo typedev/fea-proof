@@ -136,6 +136,9 @@ export function FeatureCard({
                     : 'covered glyphs (no readable word contains them)'}
                 </div>
               )}
+              {sample.note && (
+                <div className="mt-1.5 text-[11px] text-neutral-400 dark:text-neutral-600">{sample.note}</div>
+              )}
               {sample.affected.length > GLYPH_INVENTORY_THRESHOLD && (
                 <>
                   <button

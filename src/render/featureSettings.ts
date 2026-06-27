@@ -28,12 +28,37 @@ export function ligatureBeforeAfter(tag: string): { before: string; after: strin
   return { before, after }
 }
 
+// Figure-style features interact (figure style / width / position / fractions),
+// and `aalt`/`salt` re-substitute digits too. Like ligatures, several can apply
+// at once and pollute a proof — so isolate the target: turn the whole group OFF
+// for "before" (the font's nominal figures) and enable ONLY the target for
+// "after". This keeps "default" honest and avoids a sibling (or aalt) leaking in.
+const FIGURE_FEATURES = [
+  'lnum', 'onum', 'tnum', 'pnum', 'dnom', 'numr', 'sinf', 'subs', 'sups',
+  'ordn', 'ords', 'zero', 'frac', 'afrc', 'expt', 'aalt', 'salt',
+]
+
+export function figureBeforeAfter(tag: string): { before: string; after: string } {
+  const group = [...new Set([...FIGURE_FEATURES, tag])]
+  const before = group.map((t) => `"${t}" 0`).join(', ')
+  const after = group.map((t) => `"${t}" ${t === tag ? 1 : 0}`).join(', ')
+  return { before, after }
+}
+
 // HarfBuzz feature-string variants (for shaping diff, see core/shape.ts), mirroring
 // the CSS before/after above. HarfBuzz uses "tag=1" / "tag=0".
 
 export function beforeAfterFeatures(tag: string, defaultOn: boolean): { before: string[]; after: string[] } {
   if (defaultOn) return { before: [`${tag}=0`], after: [`${tag}=1`] }
   return { before: [], after: [`${tag}=1`] }
+}
+
+export function figureFeatures(tag: string): { before: string[]; after: string[] } {
+  const group = [...new Set([...FIGURE_FEATURES, tag])]
+  return {
+    before: group.map((t) => `${t}=0`),
+    after: group.map((t) => `${t}=${t === tag ? 1 : 0}`),
+  }
 }
 
 export function ligatureFeatures(tag: string): { before: string[]; after: string[] } {

@@ -102,6 +102,17 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
   components show separately; `after` enables only the target (standard liga/clig
   are default-on and would otherwise ligate identically on both sides). See
   `ligatureBeforeAfter`.
+- **Figure features are isolated** (like ligatures). A figure feature's lookup
+  often doesn't touch the base cmapped digit (its input is another figure's
+  output, e.g. `lnum` converts the oldstyle glyph). Proofing it naively let the
+  cascade path fabricate a producer — usually the `aalt` catch-all — and enable
+  it in BOTH cells, polluting "default" with arbitrary first-alternates. Fix:
+  `figureBeforeAfter`/`figureFeatures` turn the whole figure group (+ aalt/salt)
+  OFF for "before" and toggle only the target for "after"; figure-template
+  features are handled there and NEVER fall through to the cascade. If the
+  isolated toggle changes nothing (e.g. `lnum` on an already-lining font), the
+  proof is honestly identical with a "no effect on this font's default figures"
+  note (`inert`). Separately, `aalt`/`salt` are never used as cascade producers.
 - **Highlighting is a real HarfBuzz shaping diff** (`shape.ts` `changedRanges` →
   `samples/index.ts` → `highlight.tsx`): exact changed clusters as char ranges,
   ratio-gated for single/locl (skip when ~everything changes), exempt for
