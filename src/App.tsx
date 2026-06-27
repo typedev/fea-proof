@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { loadFont } from './core/load'
 import { analyzeFeatures } from './core/introspect'
 import { buildReverseCmap } from './core/glyphs'
+import { buildSubstGraph } from './core/substitution'
 import { findCombinations } from './core/combinations'
 import { loadShaper, type Shaper } from './core/shape'
 import { prepareSamples, type FeatureSample } from './samples'
@@ -88,10 +89,11 @@ function Loaded({
   onToggleTheme: () => void
 }) {
   const features = useMemo(() => analyzeFeatures(loaded.font), [loaded])
-  const combinations = useMemo(
-    () => findCombinations(loaded.font, features, buildReverseCmap(loaded.font)),
-    [loaded, features],
-  )
+  const combinations = useMemo(() => {
+    const reverse = buildReverseCmap(loaded.font)
+    const graph = buildSubstGraph(loaded.font, features)
+    return findCombinations(loaded.font, features, reverse, graph)
+  }, [loaded, features])
   const [samples, setSamples] = useState<Map<string, FeatureSample>>(new Map())
   const [shaper, setShaper] = useState<Shaper | undefined>(undefined)
   const [size, setSize] = useState(30)
