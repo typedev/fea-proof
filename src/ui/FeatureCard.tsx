@@ -4,6 +4,7 @@ import type { FeatureSample } from '../samples'
 import { Preview } from '../render/Preview'
 import { LoclPreview } from '../render/LoclPreview'
 import { AffectedGlyphs } from './AffectedGlyphs'
+import { ContextualExamples } from './ContextualExamples'
 import { ligatureBeforeAfter } from '../render/featureSettings'
 
 // Above this many affected glyphs the word sample can't show them all, so offer
@@ -99,45 +100,58 @@ export function FeatureCard({
           <LoclPreview cssFamily={cssFamily} languages={sample.languages} size={size} />
         </div>
       ) : (
-        <div className="mt-3">
-          <Preview
-            cssFamily={cssFamily}
-            text={sample.text}
-            tag={feature.tag}
-            defaultOn={feature.defaultOn}
-            size={size}
-            highlightRanges={sample.highlightRanges}
-            settings={sample.kind === 'ligature' ? ligatureBeforeAfter(feature.tag) : sample.settings}
-            labels={
-              sample.kind === 'ligature' ? { before: 'no ligatures', after: feature.tag } : undefined
-            }
-          />
-          {sample.usedCoverage && (
-            <div className="mt-1.5 text-[11px] text-neutral-400 dark:text-neutral-600">
-              {sample.kind === 'ligature'
-                ? 'component sequences (no word contains them)'
-                : 'covered glyphs (no readable word contains them)'}
+        <div className="mt-3 space-y-3">
+          {sample.text && (
+            <div>
+              <Preview
+                cssFamily={cssFamily}
+                text={sample.text}
+                tag={feature.tag}
+                defaultOn={feature.defaultOn}
+                size={size}
+                highlightRanges={sample.highlightRanges}
+                settings={sample.kind === 'ligature' ? ligatureBeforeAfter(feature.tag) : sample.settings}
+                labels={
+                  sample.kind === 'ligature' ? { before: 'no ligatures', after: feature.tag } : undefined
+                }
+              />
+              {sample.usedCoverage && (
+                <div className="mt-1.5 text-[11px] text-neutral-400 dark:text-neutral-600">
+                  {sample.kind === 'ligature'
+                    ? 'component sequences (no word contains them)'
+                    : 'covered glyphs (no readable word contains them)'}
+                </div>
+              )}
+              {sample.affected.length > GLYPH_INVENTORY_THRESHOLD && (
+                <>
+                  <button
+                    onClick={() => setShowAll((v) => !v)}
+                    className="mt-2 text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+                  >
+                    {showAll ? 'Hide' : `Show all ${sample.affected.length} affected glyphs`}
+                  </button>
+                  {showAll && (
+                    <AffectedGlyphs
+                      cssFamily={cssFamily}
+                      tag={feature.tag}
+                      defaultOn={feature.defaultOn}
+                      affected={sample.affected}
+                      size={size}
+                      isLigature={sample.kind === 'ligature'}
+                    />
+                  )}
+                </>
+              )}
             </div>
           )}
-          {sample.affected.length > GLYPH_INVENTORY_THRESHOLD && (
-            <>
-              <button
-                onClick={() => setShowAll((v) => !v)}
-                className="mt-2 text-xs text-indigo-600 hover:underline dark:text-indigo-400"
-              >
-                {showAll ? 'Hide' : `Show all ${sample.affected.length} affected glyphs`}
-              </button>
-              {showAll && (
-                <AffectedGlyphs
-                  cssFamily={cssFamily}
-                  tag={feature.tag}
-                  defaultOn={feature.defaultOn}
-                  affected={sample.affected}
-                  size={size}
-                  isLigature={sample.kind === 'ligature'}
-                />
-              )}
-            </>
+          {sample.examples && sample.examples.length > 0 && (
+            <ContextualExamples
+              cssFamily={cssFamily}
+              tag={feature.tag}
+              defaultOn={feature.defaultOn}
+              examples={sample.examples}
+              size={size}
+            />
           )}
         </div>
       )}

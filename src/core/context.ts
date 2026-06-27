@@ -68,7 +68,7 @@ export function deriveTriggers(
       const required = new Set<string>()
       for (const r of resolved) for (const f of r!.features) if (f !== feature.tag) required.add(f)
       triggers.push({ text, requiredFeatures: [...required] })
-      if (triggers.length >= 8) return triggers
+      if (triggers.length >= 200) return triggers
     }
   }
   return triggers

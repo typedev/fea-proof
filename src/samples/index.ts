@@ -12,6 +12,12 @@ import { LANGUAGES, loadWordlist, loadWordBank, type LanguageInfo, type Script }
 
 export type HighlightRanges = [number, number][]
 
+export interface ContextualExample {
+  text: string
+  settings: { before: string; after: string }
+  highlightRanges?: HighlightRanges
+}
+
 export interface LoclLanguageSample {
   otTag: string
   name: string
@@ -35,6 +41,8 @@ export type FeatureSample =
       affected: string[]
       /** Explicit CSS font-feature-settings override (ligature isolation / contextual). */
       settings?: { before: string; after: string }
+      /** Contextual substitution examples (one per derived trigger). */
+      examples?: ContextualExample[]
     }
   | { tag: string; kind: 'locl'; languages: LoclLanguageSample[] }
 
@@ -108,6 +116,7 @@ interface Pending {
   affected: string[]
   before: string[]
   after: string[]
+  examples?: ContextualExample[]
 }
 
 /** Build the per-language samples for the locl feature. */
@@ -180,44 +189,43 @@ function toCss(features: string[]): string {
 }
 
 /**
- * Contextual feature (calt, context-driven swashes…): derive a trigger string
- * analytically from the lookups, confirm via shaping that it changes something,
- * and build a sample with explicit before/after settings (producer features on,
- * target toggled).
+ * Contextual feature (calt, context swashes…): derive trigger strings
+ * analytically from each rule, keep those that actually change glyphs (confirmed
+ * by shaping), one example per unique trigger. Producer features stay on; the
+ * target is toggled.
  */
-function buildContextualSample(
+function collectContextualExamples(
   font: Font,
   feature: FeatureInfo,
   reverse: Map<number, number[]>,
   graph: ReturnType<typeof buildSubstGraph>,
   shaper: Shaper,
-): FeatureSample | null {
-  const triggers = deriveTriggers(font, feature, reverse, graph)
-  let best: { text: string; ranges: HighlightRanges; score: number; before: string[]; after: string[] } | null =
-    null
-  for (const t of triggers) {
-    const on = t.requiredFeatures.map((f) => `${f}=1`)
+  max = 48,
+): ContextualExample[] {
+  const examples: ContextualExample[] = []
+  const seen = new Set<string>()
+  for (const trigger of deriveTriggers(font, feature, reverse, graph)) {
+    if (examples.length >= max) break
+    const on = trigger.requiredFeatures.map((f) => `${f}=1`)
     const before = [...on, ...(feature.defaultOn ? [`${feature.tag}=0`] : [])]
     const after = [...on, `${feature.tag}=1`]
     let ranges: HighlightRanges
     try {
-      ranges = changedRanges(shaper, t.text, { features: before }, { features: after })
+      ranges = changedRanges(shaper, trigger.text, { features: before }, { features: after })
     } catch {
       continue
     }
-    const score = ranges.reduce((n, [s, e]) => n + (e - s), 0)
-    if (score > 0 && (!best || score > best.score)) best = { text: t.text, ranges, score, before, after }
+    if (ranges.length === 0) continue
+    const key = trigger.text
+    if (seen.has(key)) continue
+    seen.add(key)
+    examples.push({
+      text: trigger.text,
+      settings: { before: toCss(before), after: toCss(after) },
+      highlightRanges: ranges,
+    })
   }
-  if (!best) return null
-  return {
-    tag: feature.tag,
-    kind: 'single',
-    text: best.text,
-    usedCoverage: false,
-    affected: [],
-    highlightRanges: best.ranges,
-    settings: { before: toCss(best.before), after: toCss(best.after) },
-  }
+  return examples
 }
 
 /** Compute before/after sample text + precise highlight ranges for previewable features. */
@@ -282,16 +290,20 @@ export async function prepareSamples(
       continue
     }
 
-    // Dispatch by ACTUAL lookup types, not by tag (fonts vary: dlig as type 1,
-    // ordn as type 4). Try ligature (type 4) → single (type 1) → contextual
-    // (type 5/6); fall through when a kind yields nothing usable.
+    // Dispatch by ACTUAL lookup types, not by tag (fonts vary). A feature can mix
+    // kinds: collect its contextual examples (type 5/6) AND its primary
+    // ligature (type 4) / single (type 1) preview.
     const types = feature.gsubLookupTypes
+    const examples =
+      shaper && types.some((t) => t === 5 || t === 6)
+        ? collectContextualExamples(font, feature, reverse, graph, shaper)
+        : []
     let handled = false
     if (types.includes(4)) {
       const sequences = reconstructLigatures(font, feature, reverse)
       if (sequences.length > 0) {
         const { before, after } = ligatureFeatures(feature.tag)
-        pending.push({ tag: feature.tag, kind: 'ligature', sequences, affected: sequences, before, after })
+        pending.push({ tag: feature.tag, kind: 'ligature', sequences, affected: sequences, before, after, examples })
         noteScripts(sequences.map((s) => s[0]))
         handled = true
       }
@@ -300,14 +312,21 @@ export async function prepareSamples(
       const chars = affectedInputChars(font, feature, reverse)
       if (chars.length > 0) {
         const { before, after } = beforeAfterFeatures(feature.tag, feature.defaultOn)
-        pending.push({ tag: feature.tag, kind: 'single', chars, affected: chars, before, after })
+        pending.push({ tag: feature.tag, kind: 'single', chars, affected: chars, before, after, examples })
         noteScripts(chars)
         handled = true
       }
     }
-    if (!handled && shaper && types.some((t) => t === 5 || t === 6)) {
-      const sample = buildContextualSample(font, feature, reverse, graph, shaper)
-      if (sample) result.set(feature.tag, sample)
+    if (!handled && examples.length > 0) {
+      // Contextual-only feature (calt): no single/ligature primary, just examples.
+      result.set(feature.tag, {
+        tag: feature.tag,
+        kind: 'single',
+        text: '',
+        usedCoverage: false,
+        affected: [],
+        examples,
+      })
     }
   }
 
@@ -339,6 +358,7 @@ export async function prepareSamples(
         undefined,
         item.kind !== 'ligature', // ligatures: don't gate by ratio
       ),
+      examples: item.examples && item.examples.length > 0 ? item.examples : undefined,
     })
   }
 
