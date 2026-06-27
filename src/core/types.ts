@@ -14,6 +14,8 @@ export interface LoadedFont {
   scripts: string[]
   /** Whether the font has a GSUB table at all. */
   hasGsub: boolean
+  /** Decompressed sfnt bytes (for HarfBuzz shaping). */
+  sfnt: ArrayBuffer
 }
 
 /** One (script, language) context in which a feature is registered. */

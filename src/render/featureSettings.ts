@@ -27,3 +27,19 @@ export function ligatureBeforeAfter(tag: string): { before: string; after: strin
   const after = group.map((t) => `"${t}" ${t === tag ? 1 : 0}`).join(', ')
   return { before, after }
 }
+
+// HarfBuzz feature-string variants (for shaping diff, see core/shape.ts), mirroring
+// the CSS before/after above. HarfBuzz uses "tag=1" / "tag=0".
+
+export function beforeAfterFeatures(tag: string, defaultOn: boolean): { before: string[]; after: string[] } {
+  if (defaultOn) return { before: [`${tag}=0`], after: [`${tag}=1`] }
+  return { before: [], after: [`${tag}=1`] }
+}
+
+export function ligatureFeatures(tag: string): { before: string[]; after: string[] } {
+  const group = [...new Set([...LIGATURE_FEATURES, tag])]
+  return {
+    before: group.map((t) => `${t}=0`),
+    after: group.map((t) => `${t}=${t === tag ? 1 : 0}`),
+  }
+}

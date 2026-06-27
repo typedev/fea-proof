@@ -106,7 +106,7 @@ export function FeatureCard({
             tag={feature.tag}
             defaultOn={feature.defaultOn}
             size={size}
-            highlight={sample.highlight}
+            highlightRanges={sample.highlightRanges}
             settings={sample.kind === 'ligature' ? ligatureBeforeAfter(feature.tag) : undefined}
             labels={
               sample.kind === 'ligature' ? { before: 'no ligatures', after: feature.tag } : undefined

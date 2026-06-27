@@ -1,43 +1,31 @@
 import type { ReactNode } from 'react'
 
 /**
- * Wrap occurrences of `needles` (the feature's affected characters / ligature
- * sequences) in the text so the reader can spot exactly what the feature acts
- * on. Case-insensitive; longer needles match first (so ligature sequences win
- * over single chars).
+ * Wrap the given character ranges (from a HarfBuzz shaping diff — the exact
+ * clusters a feature changes) in <mark>. Whether ranges are worth showing is
+ * decided upstream (in src/samples); here we just render them.
  */
-export function highlightText(text: string, needles?: string[]): ReactNode {
-  const list = [...new Set((needles ?? []).filter(Boolean).map((n) => n.toLowerCase()))].sort(
-    (a, b) => b.length - a.length,
-  )
-  if (list.length === 0) return text
+export function highlightRanges(text: string, ranges?: [number, number][]): ReactNode {
+  if (!ranges || ranges.length === 0) return text
 
-  // Whether highlighting is worthwhile is decided upstream (per feature, in
-  // src/samples) — here we just mark the needles we're given.
-  const lower = text.toLowerCase()
+  const sorted = [...ranges].sort((a, b) => a[0] - b[0])
   const out: ReactNode[] = []
-  let plain = ''
-  let i = 0
+  let pos = 0
   let key = 0
 
-  while (i < text.length) {
-    const needle = list.find((n) => lower.startsWith(n, i))
-    if (needle) {
-      if (plain) {
-        out.push(plain)
-        plain = ''
-      }
+  for (const [rawStart, rawEnd] of sorted) {
+    const start = Math.max(rawStart, pos)
+    const end = Math.min(Math.max(rawEnd, start), text.length)
+    if (start > pos) out.push(text.slice(pos, start))
+    if (end > start) {
       out.push(
         <mark key={key++} className="rounded-sm bg-indigo-500/25 text-inherit">
-          {text.slice(i, i + needle.length)}
+          {text.slice(start, end)}
         </mark>,
       )
-      i += needle.length
-    } else {
-      plain += text[i]
-      i += 1
     }
+    pos = Math.max(pos, end)
   }
-  if (plain) out.push(plain)
+  if (pos < text.length) out.push(text.slice(pos))
   return out
 }

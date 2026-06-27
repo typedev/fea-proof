@@ -3,6 +3,7 @@ import { loadFont } from './core/load'
 import { analyzeFeatures } from './core/introspect'
 import { buildReverseCmap } from './core/glyphs'
 import { findCombinations } from './core/combinations'
+import { loadShaper } from './core/shape'
 import { prepareSamples, type FeatureSample } from './samples'
 import type { LoadedFont } from './core/types'
 import { DropZone } from './ui/DropZone'
@@ -97,9 +98,13 @@ function Loaded({
   useEffect(() => {
     let cancelled = false
     setSamples(new Map())
-    prepareSamples(loaded.font, features).then((result) => {
-      if (!cancelled) setSamples(result)
-    })
+    // HarfBuzz powers precise highlight diffs; degrade gracefully if it fails.
+    loadShaper(loaded.sfnt)
+      .catch(() => undefined)
+      .then((shaper) => prepareSamples(loaded.font, features, shaper))
+      .then((result) => {
+        if (!cancelled) setSamples(result)
+      })
     return () => {
       cancelled = true
     }

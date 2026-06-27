@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import type { LoclLanguageSample } from '../samples'
-import { highlightText } from './highlight'
+import { highlightRanges } from './highlight'
 
 export function LoclPreview({
   cssFamily,
@@ -32,8 +32,8 @@ export function LoclPreview({
               {l.usedCoverage && <span className="text-neutral-400 dark:text-neutral-600">covered glyphs</span>}
             </div>
             <div className="grid grid-cols-2 gap-px bg-neutral-200 dark:bg-neutral-800">
-              <Cell label="default" text={l.text} style={base} highlight={l.highlight} />
-              <Cell label={l.name} text={l.text} style={localized} lang={l.bcp47} highlight={l.highlight} />
+              <Cell label="default" text={l.text} style={base} ranges={l.highlightRanges} />
+              <Cell label={l.name} text={l.text} style={localized} lang={l.bcp47} ranges={l.highlightRanges} />
             </div>
           </div>
         )
@@ -47,19 +47,19 @@ function Cell({
   text,
   style,
   lang,
-  highlight,
+  ranges,
 }: {
   label: string
   text: string
   style: CSSProperties
   lang?: string
-  highlight?: string[]
+  ranges?: [number, number][]
 }) {
   return (
     <div className="bg-white p-3 dark:bg-neutral-950">
       <div className="mb-1.5 text-[11px] uppercase tracking-wide text-neutral-500">{label}</div>
       <div style={style} className="break-words text-neutral-900 dark:text-neutral-100" lang={lang}>
-        {highlightText(text, highlight)}
+        {highlightRanges(text, ranges)}
       </div>
     </div>
   )

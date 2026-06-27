@@ -10,6 +10,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "harfbuzzjs": "^1.4.0",
     "opentype.js": "^2.0.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

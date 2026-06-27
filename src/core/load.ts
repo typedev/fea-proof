@@ -88,5 +88,6 @@ export async function loadFont(file: File): Promise<LoadedFont> {
     cssFamily,
     scripts: collectScripts(font),
     hasGsub: !!(font.tables as Record<string, unknown>).gsub,
+    sfnt,
   }
 }

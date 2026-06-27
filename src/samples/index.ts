@@ -3,8 +3,12 @@ import type { FeatureInfo } from '../core/types'
 import { buildReverseCmap } from '../core/glyphs'
 import { affectedInputChars, inputCharsForLookups } from '../core/features/single'
 import { reconstructLigatures } from '../core/features/ligature'
+import { changedRanges, type Shaper, type ShapeVariant } from '../core/shape'
+import { beforeAfterFeatures, ligatureFeatures } from '../render/featureSettings'
 import { classifyScript, pickSample, pickLigatureSample } from './pick'
 import { LANGUAGES, loadWordlist, loadWordBank, type LanguageInfo, type Script } from './languages'
+
+export type HighlightRanges = [number, number][]
 
 export interface LoclLanguageSample {
   otTag: string
@@ -13,8 +17,8 @@ export interface LoclLanguageSample {
   bcp47?: string
   text: string
   usedCoverage: boolean
-  /** Affected characters to highlight in the sample. */
-  highlight?: string[]
+  /** Character ranges that actually changed (from HarfBuzz diff). */
+  highlightRanges?: HighlightRanges
 }
 
 export type FeatureSample =
@@ -23,8 +27,8 @@ export type FeatureSample =
       kind: 'single' | 'ligature'
       text: string
       usedCoverage: boolean
-      /** Affected characters / ligature sequences to highlight in the sample. */
-      highlight?: string[]
+      /** Character ranges that actually changed (from HarfBuzz diff). */
+      highlightRanges?: HighlightRanges
       /** Full set of affected chars (single) / sequences (ligature) for the inventory. */
       affected: string[]
     }
@@ -35,9 +39,7 @@ export type FeatureSample =
 //  - ccmp: glyph composition/decomposition, usually invisible
 const SKIP = new Set(['aalt', 'ccmp'])
 
-// Above this many affected glyphs, highlighting marks (almost) everything and
-// stops being useful (e.g. small caps over the whole alphabet) — so we skip it.
-const MAX_HIGHLIGHT_GLYPHS = 12
+const HB_SCRIPT: Record<Script, string> = { latn: 'Latn', cyrl: 'Cyrl', grek: 'Grek' }
 
 // Figure features whose input glyphs are often alternate (non-cmapped) forms, so
 // we always proof them on a fixed numeric template rather than discovered chars.
@@ -61,16 +63,47 @@ function coverageString(chars: string[]): string {
   return [...chars].sort((a, b) => a.codePointAt(0)! - b.codePointAt(0)!).join('')
 }
 
-interface PendingSingle {
-  tag: string
-  kind: 'single'
-  chars?: string[]
-  text?: string // pre-filled (figure template)
+/**
+ * Highlight ranges from a real shaping diff, dropped when (almost) the whole
+ * sample changes (e.g. small caps over an all-letters phrase) — highlighting is
+ * only useful when the substitutions stand out among unaffected glyphs.
+ */
+function shapingHighlight(
+  shaper: Shaper | undefined,
+  text: string,
+  before: ShapeVariant,
+  after: ShapeVariant,
+  script?: string,
+  applyGate = true,
+): HighlightRanges | undefined {
+  if (!shaper) return undefined
+  let ranges: HighlightRanges
+  try {
+    ranges = changedRanges(shaper, text, before, after, script)
+  } catch {
+    return undefined
+  }
+  if (ranges.length === 0) return undefined
+  // Drop highlighting when (almost) the whole sample changes uniformly (e.g. small
+  // caps over an all-letters phrase). Ligatures are exempt: their changes are
+  // localized clusters, never a whole alphabet — even a sequence-heavy sample.
+  if (applyGate) {
+    const changed = ranges.reduce((n, [s, e]) => n + (e - s), 0)
+    const nonSpace = text.replace(/\s/g, '').length
+    if (nonSpace === 0 || changed / nonSpace > 0.6) return undefined
+  }
+  return ranges
 }
-interface PendingLigature {
+
+interface Pending {
   tag: string
-  kind: 'ligature'
-  sequences: string[]
+  kind: 'single' | 'ligature'
+  chars?: string[]
+  sequences?: string[]
+  text?: string // pre-filled (figure template / case)
+  affected: string[]
+  before: string[]
+  after: string[]
 }
 
 /** Build the per-language samples for the locl feature. */
@@ -78,8 +111,8 @@ async function buildLoclSample(
   font: Font,
   feature: FeatureInfo,
   reverse: Map<number, number[]>,
+  shaper?: Shaper,
 ): Promise<FeatureSample | null> {
-  // Unique (script, lang) contexts with a real language system.
   const seen = new Set<string>()
   const contexts: { script: string; lang: string; lookupIndexes: number[] }[] = []
   for (const occ of feature.occurrences) {
@@ -91,8 +124,6 @@ async function buildLoclSample(
   }
   if (contexts.length === 0) return null
 
-  // Native wordlists for recognized languages (e.g. SRB → Serbian Cyrillic),
-  // plus a script-pooled bank as fallback for languages we don't have a list for.
   const matchedCodes = new Set(
     contexts.map((c) => matchLanguage(c.lang, c.script)?.code).filter((c): c is string => !!c),
   )
@@ -114,13 +145,17 @@ async function buildLoclSample(
       pool.length > 0
         ? pickSample(chars, { [script]: pool })
         : { text: coverageString(chars), usedCoverage: true }
+    const hbScript = HB_SCRIPT[script as Script]
+    const highlightRanges = info?.bcp47
+      ? shapingHighlight(shaper, text, { language: 'en' }, { language: info.bcp47 }, hbScript)
+      : undefined
     languages.push({
       otTag: lang,
       name: info?.name ?? lang,
       bcp47: info?.bcp47,
       text,
       usedCoverage,
-      highlight: !usedCoverage && chars.length <= MAX_HIGHLIGHT_GLYPHS ? chars : undefined,
+      highlightRanges,
     })
   }
   if (languages.length === 0) return null
@@ -129,14 +164,15 @@ async function buildLoclSample(
   return { tag: feature.tag, kind: 'locl', languages }
 }
 
-/** Compute before/after sample text for previewable features. */
+/** Compute before/after sample text + precise highlight ranges for previewable features. */
 export async function prepareSamples(
   font: Font,
   features: FeatureInfo[],
+  shaper?: Shaper,
 ): Promise<Map<string, FeatureSample>> {
   const reverse = buildReverseCmap(font)
   const result = new Map<string, FeatureSample>()
-  const pending: (PendingSingle | PendingLigature)[] = []
+  const pending: Pending[] = []
   const scripts = new Set<Script>()
 
   const noteScripts = (chars: string[]) => {
@@ -148,25 +184,26 @@ export async function prepareSamples(
 
   for (const feature of features) {
     if (feature.tag === 'locl') {
-      const locl = await buildLoclSample(font, feature, reverse)
+      const locl = await buildLoclSample(font, feature, reverse, shaper)
       if (locl) result.set(feature.tag, locl)
       continue
     }
 
-    // case (Case-Sensitive Forms) raises punctuation/symbols to cap height —
-    // interleave each affected glyph with capital H to show it in context.
+    // case (Case-Sensitive Forms): interleave each affected glyph with capital H
+    // so the cap-height alignment is visible in context.
     if (feature.tag === 'case' && feature.tables.includes('GSUB') && !feature.ignored) {
       const chars = affectedInputChars(font, feature, reverse)
       if (chars.length > 0) {
         const shown = chars.slice(0, 30)
         const text = 'H' + shown.map((c) => c + 'H').join('')
+        const { before, after } = beforeAfterFeatures('case', feature.defaultOn)
         result.set('case', {
           tag: 'case',
           kind: 'single',
           text,
           usedCoverage: false,
-          highlight: shown,
           affected: chars,
+          highlightRanges: shapingHighlight(shaper, text, { features: before }, { features: after }),
         })
       }
       continue
@@ -176,23 +213,31 @@ export async function prepareSamples(
 
     // Figure features: fixed numeric template (their inputs are often non-cmapped).
     if (FIGURE_TEMPLATES[feature.tag]) {
-      pending.push({ tag: feature.tag, kind: 'single', text: FIGURE_TEMPLATES[feature.tag] })
+      const { before, after } = beforeAfterFeatures(feature.tag, feature.defaultOn)
+      pending.push({
+        tag: feature.tag,
+        kind: 'single',
+        text: FIGURE_TEMPLATES[feature.tag],
+        affected: [],
+        before,
+        after,
+      })
       continue
     }
 
-    // Dispatch by ACTUAL lookup types, not by tag: fonts implement features with
-    // varying lookups (e.g. dlig as type 1, ordn as type 4). Ligature (type 4)
-    // takes priority; otherwise single (type 1). Contextual-only (type 5/6) has
-    // no preview yet (future: HarfBuzz).
+    // Dispatch by ACTUAL lookup types, not by tag (fonts vary: dlig as type 1,
+    // ordn as type 4). Ligature (type 4) first; else single (type 1).
     if (feature.gsubLookupTypes.includes(4)) {
       const sequences = reconstructLigatures(font, feature, reverse)
       if (sequences.length === 0) continue
-      pending.push({ tag: feature.tag, kind: 'ligature', sequences })
+      const { before, after } = ligatureFeatures(feature.tag)
+      pending.push({ tag: feature.tag, kind: 'ligature', sequences, affected: sequences, before, after })
       noteScripts(sequences.map((s) => s[0]))
     } else if (feature.gsubLookupTypes.includes(1)) {
       const chars = affectedInputChars(font, feature, reverse)
       if (chars.length === 0) continue
-      pending.push({ tag: feature.tag, kind: 'single', chars })
+      const { before, after } = beforeAfterFeatures(feature.tag, feature.defaultOn)
+      pending.push({ tag: feature.tag, kind: 'single', chars, affected: chars, before, after })
       noteScripts(chars)
     }
   }
@@ -200,41 +245,32 @@ export async function prepareSamples(
   const bank = await loadWordBank(scripts)
 
   for (const item of pending) {
+    let text: string
+    let usedCoverage = false
     if (item.kind === 'ligature') {
-      const script = item.sequences[0] ? classifyScript(item.sequences[0][0]) : null
+      const script = item.sequences![0] ? classifyScript(item.sequences![0][0]) : null
       const pool = (script && bank[script]) || []
-      const { text, usedCoverage } = pickLigatureSample(item.sequences, pool)
-      result.set(item.tag, {
-        tag: item.tag,
-        kind: 'ligature',
-        text,
-        usedCoverage,
-        // ligatures are many→one — the components stand out, always worth marking
-        highlight: usedCoverage ? undefined : item.sequences,
-        affected: item.sequences,
-      })
+      ;({ text, usedCoverage } = pickLigatureSample(item.sequences!, pool))
     } else if (item.text !== undefined) {
-      // figure template — the whole sample is affected, nothing specific to mark
-      result.set(item.tag, {
-        tag: item.tag,
-        kind: 'single',
-        text: item.text,
-        usedCoverage: false,
-        affected: [],
-      })
+      text = item.text
     } else {
-      const chars = item.chars!
-      const { text, usedCoverage } = pickSample(chars, bank)
-      result.set(item.tag, {
-        tag: item.tag,
-        kind: 'single',
-        text,
-        usedCoverage,
-        // 1:1 subs: mark only when they touch few glyphs (cv01/locl), not whole alphabets
-        highlight: !usedCoverage && chars.length <= MAX_HIGHLIGHT_GLYPHS ? chars : undefined,
-        affected: chars,
-      })
+      ;({ text, usedCoverage } = pickSample(item.chars!, bank))
     }
+    result.set(item.tag, {
+      tag: item.tag,
+      kind: item.kind,
+      text,
+      usedCoverage,
+      affected: item.affected,
+      highlightRanges: shapingHighlight(
+        shaper,
+        text,
+        { features: item.before },
+        { features: item.after },
+        undefined,
+        item.kind !== 'ligature', // ligatures: don't gate by ratio
+      ),
+    })
   }
 
   return result

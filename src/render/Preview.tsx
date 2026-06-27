@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import { beforeAfterSettings } from './featureSettings'
-import { highlightText } from './highlight'
+import { highlightRanges } from './highlight'
 
 interface PreviewProps {
   cssFamily: string
@@ -12,13 +12,13 @@ interface PreviewProps {
   lang?: string
   /** Label override for the two sides. */
   labels?: { before: string; after: string }
-  /** Affected chars / sequences to highlight. */
-  highlight?: string[]
+  /** Character ranges to highlight (from shaping diff). */
+  highlightRanges?: [number, number][]
   /** Precomputed font-feature-settings override (e.g. ligature isolation). */
   settings?: { before: string; after: string }
 }
 
-export function Preview({ cssFamily, text, tag, defaultOn, size = 30, lang, labels, highlight, settings }: PreviewProps) {
+export function Preview({ cssFamily, text, tag, defaultOn, size = 30, lang, labels, highlightRanges: ranges, settings }: PreviewProps) {
   const { before, after } = settings ?? beforeAfterSettings(tag, defaultOn)
   const base: CSSProperties = { fontFamily: `"${cssFamily}", system-ui`, fontSize: size, lineHeight: 1.35 }
   const defaultLabels = defaultOn
@@ -28,8 +28,8 @@ export function Preview({ cssFamily, text, tag, defaultOn, size = 30, lang, labe
 
   return (
     <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-neutral-200 dark:bg-neutral-800">
-      <Cell label={finalLabels.before} text={text} highlight={highlight} style={{ ...base, fontFeatureSettings: before }} />
-      <Cell label={finalLabels.after} text={text} highlight={highlight} style={{ ...base, fontFeatureSettings: after }} lang={lang} />
+      <Cell label={finalLabels.before} text={text} ranges={ranges} style={{ ...base, fontFeatureSettings: before }} />
+      <Cell label={finalLabels.after} text={text} ranges={ranges} style={{ ...base, fontFeatureSettings: after }} lang={lang} />
     </div>
   )
 }
@@ -39,19 +39,19 @@ function Cell({
   text,
   style,
   lang,
-  highlight,
+  ranges,
 }: {
   label: string
   text: string
   style: CSSProperties
   lang?: string
-  highlight?: string[]
+  ranges?: [number, number][]
 }) {
   return (
     <div className="bg-white p-4 dark:bg-neutral-950">
       <div className="mb-2 text-[11px] uppercase tracking-wide text-neutral-500">{label}</div>
       <div style={style} className="break-words text-neutral-900 dark:text-neutral-100" lang={lang}>
-        {highlightText(text, highlight)}
+        {highlightRanges(text, ranges)}
       </div>
     </div>
   )
