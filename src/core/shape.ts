@@ -15,9 +15,17 @@ export interface ShapeVariant {
   language?: string
 }
 
+export interface ShapedGlyph {
+  /** Glyph id. */
+  g: number
+  /** Source cluster (char index). */
+  cl: number
+  /** X advance (for detecting spacing-only changes like tnum/pnum). */
+  ax: number
+}
+
 export interface Shaper {
-  /** Shape text → glyphs with their source cluster (char index). */
-  shape(text: string, variant?: ShapeVariant, script?: string): { g: number; cl: number }[]
+  shape(text: string, variant?: ShapeVariant, script?: string): ShapedGlyph[]
 }
 
 /** Whether HarfBuzz is available (wasm loaded). Used to gracefully degrade. */
@@ -38,7 +46,9 @@ export async function loadShaper(sfnt: ArrayBuffer): Promise<Shaper> {
         .map((s) => hb.Feature.fromString(s))
         .filter((f): f is NonNullable<typeof f> => !!f)
       hb.shape(font, buffer, features)
-      return buffer.getGlyphInfosAndPositions().map((i) => ({ g: i.codepoint, cl: i.cluster }))
+      return buffer
+        .getGlyphInfosAndPositions()
+        .map((i) => ({ g: i.codepoint, cl: i.cluster, ax: i.xAdvance ?? 0 }))
     },
   }
 }
@@ -55,7 +65,7 @@ export function changedRanges(
   after: ShapeVariant,
   script?: string,
 ): [number, number][] {
-  const sig = (run: { g: number; cl: number }[]): Map<number, string> => {
+  const sig = (run: ShapedGlyph[]): Map<number, string> => {
     const byCluster = new Map<number, number[]>()
     for (const { g, cl } of run) {
       const arr = byCluster.get(cl) ?? byCluster.set(cl, []).get(cl)!

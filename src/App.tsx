@@ -3,7 +3,7 @@ import { loadFont } from './core/load'
 import { analyzeFeatures } from './core/introspect'
 import { buildReverseCmap } from './core/glyphs'
 import { findCombinations } from './core/combinations'
-import { loadShaper } from './core/shape'
+import { loadShaper, type Shaper } from './core/shape'
 import { prepareSamples, type FeatureSample } from './samples'
 import type { LoadedFont } from './core/types'
 import { DropZone } from './ui/DropZone'
@@ -93,15 +93,20 @@ function Loaded({
     [loaded, features],
   )
   const [samples, setSamples] = useState<Map<string, FeatureSample>>(new Map())
+  const [shaper, setShaper] = useState<Shaper | undefined>(undefined)
   const [size, setSize] = useState(30)
 
   useEffect(() => {
     let cancelled = false
     setSamples(new Map())
-    // HarfBuzz powers precise highlight diffs; degrade gracefully if it fails.
+    setShaper(undefined)
+    // HarfBuzz powers precise highlight diffs + interaction detection; degrade if it fails.
     loadShaper(loaded.sfnt)
       .catch(() => undefined)
-      .then((shaper) => prepareSamples(loaded.font, features, shaper))
+      .then((sh) => {
+        if (!cancelled) setShaper(sh)
+        return prepareSamples(loaded.font, features, sh)
+      })
       .then((result) => {
         if (!cancelled) setSamples(result)
       })
@@ -122,7 +127,12 @@ function Loaded({
       </div>
       <Controls size={size} onSize={setSize} theme={theme} onToggleTheme={onToggleTheme} />
       <FeatureList features={features} samples={samples} cssFamily={loaded.cssFamily} size={size} />
-      <CombinationExplorer groups={combinations} cssFamily={loaded.cssFamily} size={Math.max(size, 36)} />
+      <CombinationExplorer
+        groups={combinations}
+        cssFamily={loaded.cssFamily}
+        size={Math.max(size, 36)}
+        shaper={shaper}
+      />
     </div>
   )
 }
