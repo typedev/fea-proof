@@ -3,7 +3,7 @@ import { loadFont } from './core/load'
 import { analyzeFeatures } from './core/introspect'
 import { buildReverseCmap } from './core/glyphs'
 import { buildSubstGraph } from './core/substitution'
-import { findCombinations } from './core/combinations'
+import { findCombinations, type CombinationGroup } from './core/combinations'
 import { loadShaper, type Shaper } from './core/shape'
 import { prepareSamples, type FeatureSample } from './samples'
 import type { LoadedFont } from './core/types'
@@ -89,12 +89,8 @@ function Loaded({
   onToggleTheme: () => void
 }) {
   const features = useMemo(() => analyzeFeatures(loaded.font), [loaded])
-  const combinations = useMemo(() => {
-    const reverse = buildReverseCmap(loaded.font)
-    const graph = buildSubstGraph(loaded.font, features)
-    return findCombinations(loaded.font, features, reverse, graph)
-  }, [loaded, features])
   const [samples, setSamples] = useState<Map<string, FeatureSample>>(new Map())
+  const [combinations, setCombinations] = useState<CombinationGroup[]>([])
   const [shaper, setShaper] = useState<Shaper | undefined>(undefined)
   const [size, setSize] = useState(30)
 
@@ -102,15 +98,21 @@ function Loaded({
     let cancelled = false
     setSamples(new Map())
     setShaper(undefined)
-    // HarfBuzz powers precise highlight diffs + interaction detection; degrade if it fails.
+    setCombinations([])
+    // HarfBuzz powers precise highlight diffs, interaction detection, and the
+    // shaping-based combination grouping; degrade gracefully if it fails.
     loadShaper(loaded.sfnt)
       .catch(() => undefined)
       .then((sh) => {
-        if (!cancelled) setShaper(sh)
+        if (cancelled) return undefined
+        setShaper(sh)
+        const reverse = buildReverseCmap(loaded.font)
+        const graph = buildSubstGraph(loaded.font, features)
+        setCombinations(findCombinations(loaded.font, features, reverse, graph, sh))
         return prepareSamples(loaded.font, features, sh)
       })
       .then((result) => {
-        if (!cancelled) setSamples(result)
+        if (!cancelled && result) setSamples(result)
       })
     return () => {
       cancelled = true
