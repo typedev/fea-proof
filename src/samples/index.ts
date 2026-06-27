@@ -452,19 +452,7 @@ export async function prepareSamples(
         const chars = affectedInputChars(font, feature, reverse)
         if (chars.length > 0) {
           const { before, after } = beforeAfterFeatures(feature.tag, feature.defaultOn)
-          // For contextual features (calt and handwriting-style dlig with type 5/6),
-          // the per-glyph inventory misrepresents context-dependent substitution —
-          // keep the word preview + contextual examples, drop the isolated grid.
-          const contextual = feature.gsubLookupTypes.some((t) => t === 5 || t === 6)
-          pending.push({
-            tag: feature.tag,
-            kind: 'single',
-            chars,
-            affected: contextual ? [] : chars,
-            before,
-            after,
-            examples,
-          })
+          pending.push({ tag: feature.tag, kind: 'single', chars, affected: chars, before, after, examples })
           noteScripts(chars)
           handled = true
         }
