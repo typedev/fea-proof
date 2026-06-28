@@ -14,6 +14,7 @@
 import { changedRanges, type Shaper } from '../core/shape'
 import { classifyScript, findLigatureWord } from './pick'
 import { loadWordBank, type Script } from './languages'
+import type { PositionRole } from '../render/featureSettings'
 
 const HB_SCRIPT: Record<Script, string> = { latn: 'Latn', cyrl: 'Cyrl', grek: 'Grek' }
 
@@ -44,7 +45,7 @@ const SINGLE_CAND_SCAN = 40000
  * so we try them in turn and let the shaping check pick the one that fires. Words
  * are case-fitted to the char.
  */
-function singleCandidates(char: string, pool: string[], max = 9): string[] {
+function singleCandidates(char: string, pool: string[], max = 9, role?: PositionRole): string[] {
   const lc = char.toLowerCase()
   const upper = char !== lc && char === char.toUpperCase()
   const fit = (w: string) => (upper ? w.toUpperCase() : w)
@@ -60,6 +61,10 @@ function singleCandidates(char: string, pool: string[], max = 9): string[] {
     const bucket = idx === 0 ? starts : idx + lc.length === w.length ? ends : mids
     bucket.push(fit(w))
   }
+  // A positional feature (init/fina/medi) needs the glyph in that exact spot.
+  if (role === 'start') return starts.slice(0, max)
+  if (role === 'end') return ends.slice(0, max)
+  if (role === 'mid') return mids.slice(0, max)
   const out: string[] = []
   const seen = new Set<string>()
   for (let i = 0; i < max; i++) {
@@ -92,6 +97,7 @@ export async function inlineSamples(
   isLigature: boolean,
   proof?: SpotlightProof,
   shaper?: Shaper,
+  position?: PositionRole,
 ): Promise<Map<string, InlineSample | null>> {
   const bank = await getBank()
   const map = new Map<string, InlineSample | null>()
@@ -125,7 +131,9 @@ export async function inlineSamples(
       continue
     }
 
-    const cands = singleCandidates(item, pool)
+    // Positional feature (init/fina/medi/isol): the demo word must place the
+    // glyph in that position, and only that occurrence is highlighted.
+    const cands = position === 'isolated' ? [item] : singleCandidates(item, pool, 9, position)
     if (cands.length === 0) {
       map.set(item, null)
       continue
@@ -139,11 +147,19 @@ export async function inlineSamples(
         for (let i = wl.indexOf(lcItem); i >= 0; i = wl.indexOf(lcItem, i + 1)) out.push(i)
         return out
       }
+      // Keep only the occurrence(s) in the feature's named position.
+      const wanted = (word: string, ps: number[]): number[] => {
+        if (position === 'start') return ps.filter((p) => p === 0)
+        if (position === 'end') return ps.filter((p) => p + item.length === word.length)
+        if (position === 'mid') return ps.filter((p) => p > 0 && p + item.length < word.length)
+        return ps
+      }
       // Try the word standalone AND space-padded: features differ on what counts
       // as a word boundary — an initial form fires at the string start (no space),
-      // a swash-final form needs an actual space after the letter. We render
-      // whichever context actually triggers, so the cell matches the highlight.
-      const contexts = [(w: string) => w, (w: string) => ` ${w} `]
+      // a swash-final form needs an actual space after the letter, an isolated
+      // form needs spaces both sides. Render whichever context actually triggers.
+      const contexts =
+        position === 'isolated' ? [(w: string) => ` ${w} `] : [(w: string) => w, (w: string) => ` ${w} `]
       let picked: InlineSample | null = null
       outer: for (const word of cands) {
         for (const wrap of contexts) {
@@ -152,9 +168,10 @@ export async function inlineSamples(
           try {
             const r = changedRanges(shaper!, text, variants[0], variants[1], hbScript)
             if (r.length === 0) continue
-            // Keep it only if THIS glyph changed (not some other letter the
-            // feature also touches, e.g. a word-final letter under a final form).
-            const hit = positions(word)
+            // Keep it only if THIS glyph changed in its target position (not some
+            // other letter the feature also touches, e.g. a non-final letter under
+            // a forced final form).
+            const hit = wanted(word, positions(word))
               .map((p) => p + off)
               .filter((p) => r.some(([s, e]) => p >= s && p < e))
             if (hit.length > 0) {

@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import { beforeAfterSettings, ligatureBeforeAfter } from '../render/featureSettings'
+import { beforeAfterSettings, ligatureBeforeAfter, positionalRole } from '../render/featureSettings'
 import { classifyScript } from '../samples/pick'
 import { inlineSamples, type InlineSample } from '../samples/spotlight'
 import { highlightRanges } from '../render/highlight'
@@ -74,13 +74,13 @@ export function AffectedGlyphs({
     }
     let cancelled = false
     setWords(null)
-    inlineSamples(affected, isLigature, { kind: 'feature', before, after }, shaper).then((m) => {
+    inlineSamples(affected, isLigature, { kind: 'feature', before, after }, shaper, positionalRole(tag)).then((m) => {
       if (!cancelled) setWords(m)
     })
     return () => {
       cancelled = true
     }
-  }, [affected, isLigature, spotlight, before, after, shaper])
+  }, [affected, isLigature, spotlight, before, after, shaper, tag])
 
   return (
     <div className="mt-3 space-y-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950/50">

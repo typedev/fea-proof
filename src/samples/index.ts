@@ -535,8 +535,12 @@ export async function prepareSamples(
       // grid (the per-rule triggers below only show one representative each).
       const chars = contextualInputChars(font, feature, reverse)
       if (chars.length > 0) {
+        // The full affected-letter grid (each with a shape-verified demo word) and
+        // the real-word preview cover this feature far better than the per-rule
+        // triggers, which collapse a 98-glyph "any letter" rule to one bare 'o';
+        // drop them here to avoid a confusing "5 identical-looking pairs" section.
         const { before, after } = beforeAfterFeatures(feature.tag, feature.defaultOn)
-        pending.push({ tag: feature.tag, kind: 'single', chars, affected: chars, before, after, examples })
+        pending.push({ tag: feature.tag, kind: 'single', chars, affected: chars, before, after })
         noteScripts(chars)
         handled = true
       }

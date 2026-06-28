@@ -166,6 +166,14 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
   actually fires — an initial form triggers at the string start (no space), a
   swash-final form needs a real space after the letter, and they'd cancel under a
   single fixed context.
+- **Positional features** (`init`/`fina`/`medi`/`isol`) are usually plain
+  single-subs (no positional gating of their own — `calt` drives position at
+  runtime), so forcing `fina=1` applies the final form to the WHOLE run. The demo
+  word must therefore place the glyph in the named position and highlight only it
+  (`positionalRole` → `inlineSamples` position arg: init=start, fina=end,
+  medi=mid, isol=space-isolated); otherwise a final form shows up word-initially
+  and reads as a wrong substitution. A letter with no word in that slot (few words
+  end in `b`) honestly falls back to the bare pair.
 - **Default-on/off matters**: default-off → before = baseline, after = `"tag" 1`;
   default-on → before = `"tag" 0`, after = `"tag" 1`.
 - **Sticky nav scroll offset.** The feature navigator lives in the sticky

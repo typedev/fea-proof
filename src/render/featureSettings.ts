@@ -55,6 +55,22 @@ export function isCaseFeature(tag: string): boolean {
   return CASE_FEATURES.includes(tag)
 }
 
+// Positional features substitute a glyph for the form used in a given word
+// position. The demo word must place the glyph there (and we highlight just that
+// position) — otherwise, since these are usually plain single-subs that apply to
+// the whole run when forced on, a "final form" would show up word-initially.
+export type PositionRole = 'start' | 'end' | 'mid' | 'isolated'
+const POSITIONAL: Record<string, PositionRole> = {
+  init: 'start',
+  fina: 'end',
+  medi: 'mid',
+  isol: 'isolated',
+}
+
+export function positionalRole(tag: string): PositionRole | undefined {
+  return POSITIONAL[tag]
+}
+
 export function figureBeforeAfter(tag: string): { before: string; after: string } {
   const group = [...new Set([...FIGURE_FEATURES, tag])]
   const before = group.map((t) => `"${t}" 0`).join(', ')
