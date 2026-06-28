@@ -139,20 +139,31 @@ export async function inlineSamples(
         for (let i = wl.indexOf(lcItem); i >= 0; i = wl.indexOf(lcItem, i + 1)) out.push(i)
         return out
       }
+      // Try the word standalone AND space-padded: features differ on what counts
+      // as a word boundary — an initial form fires at the string start (no space),
+      // a swash-final form needs an actual space after the letter. We render
+      // whichever context actually triggers, so the cell matches the highlight.
+      const contexts = [(w: string) => w, (w: string) => ` ${w} `]
       let picked: InlineSample | null = null
-      for (const word of cands) {
-        try {
-          const r = changedRanges(shaper!, word, variants[0], variants[1], hbScript)
-          if (r.length === 0) continue
-          // Keep the word only if THIS glyph changed (not some other letter the
-          // feature also touches, e.g. a word-final letter under a final-form set).
-          const hit = positions(word).filter((p) => r.some(([s, e]) => p >= s && p < e))
-          if (hit.length > 0) {
-            picked = { text: word, ranges: hit.map((p) => [p, p + item.length]) }
-            break
+      outer: for (const word of cands) {
+        for (const wrap of contexts) {
+          const text = wrap(word)
+          const off = text.indexOf(word)
+          try {
+            const r = changedRanges(shaper!, text, variants[0], variants[1], hbScript)
+            if (r.length === 0) continue
+            // Keep it only if THIS glyph changed (not some other letter the
+            // feature also touches, e.g. a word-final letter under a final form).
+            const hit = positions(word)
+              .map((p) => p + off)
+              .filter((p) => r.some(([s, e]) => p >= s && p < e))
+            if (hit.length > 0) {
+              picked = { text, ranges: hit.map((p) => [p, p + item.length]) }
+              break outer
+            }
+          } catch {
+            // shaping failed for this context — try the next
           }
-        } catch {
-          // shaping failed for this word — try the next
         }
       }
       // With a shaper we KNOW whether this glyph changes in context. If no

@@ -155,6 +155,17 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
   (`substitution.ts`); confirmed by shaping. No brute-force. A feature shows ALL
   its contextual substitutions (one example per rule), alongside any
   ligature/single primary — features mix lookup kinds.
+- **Contextual features are also proofed on real words.** One derived trigger only
+  stands in ONE representative ('o') for a 98-glyph "any letter" rule (e.g. a
+  swash's init/fin forms), so `contextualInputChars` returns the whole substituted
+  coverage; a contextual feature with cmapped base input is dispatched like a
+  `single` — a real-word primary preview PLUS the full affected-letter grid (each
+  letter gets a shape-verified inline demo word) — with the per-rule triggers kept
+  alongside. Boundary handling: the inline shape-check tries each candidate word
+  BOTH standalone and space-padded (` word `) and renders whichever context
+  actually fires — an initial form triggers at the string start (no space), a
+  swash-final form needs a real space after the letter, and they'd cancel under a
+  single fixed context.
 - **Default-on/off matters**: default-off → before = baseline, after = `"tag" 1`;
   default-on → before = `"tag" 0`, after = `"tag" 1`.
 - **Sticky nav scroll offset.** The feature navigator lives in the sticky

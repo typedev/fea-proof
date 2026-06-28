@@ -264,3 +264,51 @@ export function deriveTriggers(
   }
   return [...byKey.values()]
 }
+
+/**
+ * The cmapped base letters a contextual feature substitutes — the glyphs in its
+ * rules' INPUT coverage (Format 3) or anchor coverage (Format 1/2). A single
+ * derived trigger only stands in one representative ('o') for a 98-glyph "any
+ * letter" rule; this returns the whole set so the feature can be proofed on real
+ * words and every affected letter listed. Context-only positions (backtrack /
+ * lookahead) are excluded — only the substituted positions.
+ */
+export function contextualInputChars(
+  font: Font,
+  feature: FeatureInfo,
+  reverse: Map<number, number[]>,
+  max = 200,
+): string[] {
+  const gsub = (font.tables as Record<string, GsubTable | undefined>).gsub
+  const lookups = gsub?.lookups ?? []
+  const lookupIndexes = new Set<number>()
+  for (const occ of feature.occurrences) for (const li of occ.lookupIndexes) lookupIndexes.add(li)
+
+  const chars = new Set<string>()
+  const isLetter = /\p{L}/u
+  const addCoverage = (cov: Coverage | undefined) => {
+    for (const g of coverageGlyphs(cov)) {
+      const cp = reverse.get(g)?.[0]
+      if (cp === undefined) continue
+      const ch = String.fromCodePoint(cp)
+      if (isLetter.test(ch)) chars.add(ch)
+    }
+  }
+
+  for (const li of lookupIndexes) {
+    if (chars.size >= max) break
+    const lookup = lookups[li]
+    if (!lookup) continue
+    const { type, subtables } = resolveLookup(lookup)
+    if (type !== 5 && type !== 6) continue
+    for (const st of subtables as unknown as ContextSubtable[]) {
+      if (st.substFormat === 3) {
+        const covs = (type === 6 ? st.inputCoverage : st.coverages) ?? []
+        for (const c of covs) addCoverage(c)
+      } else {
+        addCoverage(st.coverage)
+      }
+    }
+  }
+  return [...chars].slice(0, max)
+}

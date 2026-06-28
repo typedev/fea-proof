@@ -5,7 +5,7 @@ import { affectedInputChars, inputCharsForLookups, inputGlyphsForLookups } from 
 import { reconstructLigatures } from '../core/features/ligature'
 import { changedRanges, type Shaper, type ShapeVariant } from '../core/shape'
 import { buildSubstGraph, resolveGlyph, isPUA } from '../core/substitution'
-import { deriveTriggers } from '../core/context'
+import { deriveTriggers, contextualInputChars } from '../core/context'
 import { beforeAfterFeatures, ligatureFeatures, figureBeforeAfter, figureFeatures } from '../render/featureSettings'
 import { classifyScript, pickSample, pickLigatureSample, tagOffset } from './pick'
 import { LANGUAGES, loadWordlist, loadWordBank, type LanguageInfo, type Script } from './languages'
@@ -528,8 +528,21 @@ export async function prepareSamples(
         }
       }
     }
+    if (!handled && types.some((t) => t === 5 || t === 6)) {
+      // Contextual feature whose substitutions act on cmapped base letters
+      // (swash init/fin forms, contextual alternates). Proof it on real words and
+      // list every affected letter — each gets a shape-verified demo word in the
+      // grid (the per-rule triggers below only show one representative each).
+      const chars = contextualInputChars(font, feature, reverse)
+      if (chars.length > 0) {
+        const { before, after } = beforeAfterFeatures(feature.tag, feature.defaultOn)
+        pending.push({ tag: feature.tag, kind: 'single', chars, affected: chars, before, after, examples })
+        noteScripts(chars)
+        handled = true
+      }
+    }
     if (!handled && examples.length > 0) {
-      // Contextual-only feature (calt): no single/ligature primary, just examples.
+      // Contextual-only feature with no cmapped base input: just the triggers.
       result.set(feature.tag, {
         tag: feature.tag,
         kind: 'single',
