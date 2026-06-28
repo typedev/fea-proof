@@ -3,6 +3,7 @@ import { beforeAfterSettings, ligatureBeforeAfter } from '../render/featureSetti
 import { classifyScript } from '../samples/pick'
 import { inlineSamples, type InlineSample } from '../samples/spotlight'
 import { highlightRanges } from '../render/highlight'
+import type { Shaper } from '../core/shape'
 
 const SCRIPT_LABELS: Record<string, string> = {
   latn: 'Latin',
@@ -33,6 +34,7 @@ export function AffectedGlyphs({
   size = 26,
   isLigature = false,
   settings,
+  shaper,
   spotlight = true,
 }: {
   cssFamily: string
@@ -42,7 +44,8 @@ export function AffectedGlyphs({
   size?: number
   isLigature?: boolean
   settings?: { before: string; after: string }
-  /** Show inline demo words (off for numeric features, proofed on templates). */
+  shaper?: Shaper
+  /** Show inline demo words (off for numeric / case features). */
   spotlight?: boolean
 }) {
   const resolved = settings ?? (isLigature ? ligatureBeforeAfter(tag) : beforeAfterSettings(tag, defaultOn))
@@ -71,13 +74,13 @@ export function AffectedGlyphs({
     }
     let cancelled = false
     setWords(null)
-    inlineSamples(affected, isLigature).then((m) => {
+    inlineSamples(affected, isLigature, { kind: 'feature', before, after }, shaper).then((m) => {
       if (!cancelled) setWords(m)
     })
     return () => {
       cancelled = true
     }
-  }, [affected, isLigature, spotlight])
+  }, [affected, isLigature, spotlight, before, after, shaper])
 
   return (
     <div className="mt-3 space-y-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950/50">
@@ -111,7 +114,7 @@ export function AffectedGlyphs({
                       style={onStyle}
                       className="border-l border-neutral-200 pl-2 text-neutral-700 dark:border-neutral-800 dark:text-neutral-300"
                     >
-                      {highlightRanges(sample.text, sample.range ? [sample.range] : undefined)}
+                      {highlightRanges(sample.text, sample.ranges)}
                     </span>
                   )}
                 </div>

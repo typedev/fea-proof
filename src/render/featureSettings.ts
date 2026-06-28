@@ -47,6 +47,14 @@ export function isFigureLikeFeature(tag: string): boolean {
   return FIGURE_FEATURES.includes(tag)
 }
 
+// Case / small-caps features change every letter uniformly (a whole-alphabet
+// case shift), so an inline demo word adds nothing over the glyph1 → glyph2 pair.
+const CASE_FEATURES = ['smcp', 'c2sc', 'pcap', 'c2pc', 'unic', 'cpsp']
+
+export function isCaseFeature(tag: string): boolean {
+  return CASE_FEATURES.includes(tag)
+}
+
 export function figureBeforeAfter(tag: string): { before: string; after: string } {
   const group = [...new Set([...FIGURE_FEATURES, tag])]
   const before = group.map((t) => `"${t}" 0`).join(', ')

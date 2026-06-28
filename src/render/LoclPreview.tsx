@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import type { LoclLanguageSample } from '../samples'
+import type { Shaper } from '../core/shape'
 import { inlineSamples, type InlineSample } from '../samples/spotlight'
 import { highlightRanges } from './highlight'
 import { codepoints } from '../ui/AffectedGlyphs'
@@ -11,17 +12,19 @@ export function LoclPreview({
   cssFamily,
   languages,
   size = 28,
+  shaper,
 }: {
   cssFamily: string
   languages: LoclLanguageSample[]
   size?: number
+  shaper?: Shaper
 }) {
   const base: CSSProperties = { fontFamily: `"${cssFamily}", system-ui`, fontSize: size, lineHeight: 1.4 }
 
   return (
     <div className="space-y-2">
       {languages.map((l) => (
-        <LangBlock key={l.otTag} lang={l} base={base} cssFamily={cssFamily} size={size} />
+        <LangBlock key={l.otTag} lang={l} base={base} cssFamily={cssFamily} size={size} shaper={shaper} />
       ))}
     </div>
   )
@@ -32,11 +35,13 @@ function LangBlock({
   base,
   cssFamily,
   size,
+  shaper,
 }: {
   lang: LoclLanguageSample
   base: CSSProperties
   cssFamily: string
   size: number
+  shaper?: Shaper
 }) {
   const [showAll, setShowAll] = useState(false)
   // font-language-override takes the OT language system tag directly — the
@@ -78,7 +83,7 @@ function LangBlock({
             </button>
           )}
           {(!collapsible || showAll) && (
-            <Inventory lang={l} base={base} localized={localized} cssFamily={cssFamily} size={size} />
+            <Inventory lang={l} base={base} localized={localized} cssFamily={cssFamily} size={size} shaper={shaper} />
           )}
         </div>
       )}
@@ -97,12 +102,14 @@ function Inventory({
   localized,
   cssFamily,
   size,
+  shaper,
 }: {
   lang: LoclLanguageSample
   base: CSSProperties
   localized: CSSProperties
   cssFamily: string
   size: number
+  shaper?: Shaper
 }) {
   const glyphSize = Math.min(size, 30)
   const off: CSSProperties = { ...base, fontFamily: `"${cssFamily}", system-ui`, fontSize: glyphSize }
@@ -112,13 +119,13 @@ function Inventory({
   useEffect(() => {
     let cancelled = false
     setWords(null)
-    inlineSamples(l.affected, false).then((m) => {
+    inlineSamples(l.affected, false, { kind: 'locl', bcp47: l.bcp47 }, shaper).then((m) => {
       if (!cancelled) setWords(m)
     })
     return () => {
       cancelled = true
     }
-  }, [l.affected])
+  }, [l.affected, l.bcp47, shaper])
 
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -145,7 +152,7 @@ function Inventory({
                 lang={l.bcp47}
                 className="border-l border-neutral-200 pl-2 text-neutral-700 dark:border-neutral-800 dark:text-neutral-300"
               >
-                {highlightRanges(sample.text, sample.range ? [sample.range] : undefined)}
+                {highlightRanges(sample.text, sample.ranges)}
               </span>
             )}
           </div>
