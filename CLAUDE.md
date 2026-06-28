@@ -59,15 +59,15 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
     char with a short word. `findLigatureWord` matches ligature sequences
     CASE-INSENSITIVELY then refits the word's case (uppercase display ligatures
     like `AA`/`AND` would otherwise find nothing in lowercase wordlists — this
-    took Zhivov from 5/766 covered to ~670).
-  - `spotlight.ts` — `buildSpotlight`: lazy real-word before/after demo for ONE
-    affected glyph (the hover popover). Word bank is font-INDEPENDENT so it's
-    cached globally; highlight reuses `changedRanges`. Two `proof` modes:
-    `feature` (card CSS settings → HB via `cssToHbFeatures`) and `locl`
-    (default vs BCP-47 language). UI lives in `ui/GlyphSpotlight.tsx`
-    (`useGlyphSpotlight` hook + popover), shared by `AffectedGlyphs` and the
-    `locl` inventory. `coveredItems` pre-checks which tiles actually have a
-    word so the rest render non-interactive (no bare "same as the tile" proof).
+    took one uppercase-ligature display face from 5/766 covered to ~670).
+  - `spotlight.ts` — `inlineSamples`: lazily picks a demo word for each affected
+    item so each tile shows `glyph1 → glyph2` PLUS that word (rendered with the
+    feature applied, the item highlighted by string position — no shaping). Word
+    bank is font-INDEPENDENT so it's cached globally; loaded when a grid expands.
+    Multi-codepoint items use the ligature matcher; singles use `singleCandidates`
+    (word start/end/middle interleaved, so positional contextual alternates —
+    e.g. word-initial-only ssXX — surface a triggering word). Items with no word
+    show just the pair. (Earlier hover-popover design removed for inline cells.)
   - `languages.ts` — `LanguageInfo[]` (OT-lang tag ↔ name ↔ BCP-47 ↔ wordlist
     `code`, per script), lazy `import.meta.glob` of `wordlists/*.json`. Used
     only for `locl` matching + word sourcing. `loadWordBank` **interleaves**
@@ -76,12 +76,12 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
 - `src/render/` — `featureSettings.ts` (before/after `font-feature-settings`:
   plain, ligature isolation, and figure isolation `figureBeforeAfter`/
   `figureFeatures`), `Preview.tsx`, `LoclPreview.tsx` (per-language cells +
-  localized-forms inventory, with the per-glyph spotlight on inventory tiles),
+  localized-forms inventory, each form shown with an inline localized demo word),
   `highlight.tsx` (mark affected chars).
 - `src/ui/` — `DropZone`, `Header`, `Controls` (sticky bar; hosts `FeatureNav`
   + publishes `--scroll-offset`), `FeatureNav` (jump-list), `FeatureList`,
-  `FeatureCard`, `AffectedGlyphs` (full inventory; per-glyph hover spotlight —
-  letters of non-numeric features only, gated by `isFigureLikeFeature`),
+  `FeatureCard`, `AffectedGlyphs` (full inventory; each tile shows the pair plus
+  an inline demo word — off for numeric features, gated by `isFigureLikeFeature`),
   `AltGrid` (alternates),
   `ContextualExamples`, `CombinationExplorer`, `OrphanGlyphs` (unreachable).
 - `src/App.tsx` — state + layout.

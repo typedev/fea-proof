@@ -1,9 +1,8 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { beforeAfterSettings, ligatureBeforeAfter } from '../render/featureSettings'
 import { classifyScript } from '../samples/pick'
-import { buildSpotlight, coveredItems } from '../samples/spotlight'
-import type { Shaper } from '../core/shape'
-import { useGlyphSpotlight, INTERACTIVE_TILE_CLASS, codepoints } from './GlyphSpotlight'
+import { inlineSamples, type InlineSample } from '../samples/spotlight'
+import { highlightRanges } from '../render/highlight'
 
 const SCRIPT_LABELS: Record<string, string> = {
   latn: 'Latin',
@@ -12,16 +11,19 @@ const SCRIPT_LABELS: Record<string, string> = {
   other: 'Other',
 }
 const SCRIPT_ORDER = ['latn', 'cyrl', 'grek', 'other']
-const reLetter = /\p{L}/u
+
+/** "U+0041 U+0041" — hover title for a glyph / sequence tile. */
+export function codepoints(item: string): string {
+  return [...item].map((c) => 'U+' + c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')).join(' ')
+}
 
 /**
  * Full inventory of a feature's affected glyphs: every input character (single)
- * or component sequence (ligature) shown default → feature-on, grouped by script.
- *
- * Letter tiles of non-numeric features are buttons: hovering (or focusing) pops a
- * spotlight that proofs THAT substitution on a real word; clicking pins it so you
- * can pull a different word. Solves the coverage gap — the inline word can only
- * surface a handful of a large alphabet's forms.
+ * or component sequence (ligature) shown default → feature-on, and — when a real
+ * word contains it — that word rendered with the feature applied (the glyph
+ * highlighted), so you see the substitution in living text. Tiles with no word
+ * just show the pair. Words are skipped entirely for numeric features (spotlight
+ * off), which proof on templates instead.
  */
 export function AffectedGlyphs({
   cssFamily,
@@ -31,7 +33,6 @@ export function AffectedGlyphs({
   size = 26,
   isLigature = false,
   settings,
-  shaper,
   spotlight = true,
 }: {
   cssFamily: string
@@ -41,8 +42,7 @@ export function AffectedGlyphs({
   size?: number
   isLigature?: boolean
   settings?: { before: string; after: string }
-  shaper?: Shaper
-  /** Enable the per-glyph real-word hover spotlight (off for numeric features). */
+  /** Show inline demo words (off for numeric features, proofed on templates). */
   spotlight?: boolean
 }) {
   const resolved = settings ?? (isLigature ? ligatureBeforeAfter(tag) : beforeAfterSettings(tag, defaultOn))
@@ -62,38 +62,22 @@ export function AffectedGlyphs({
   const offStyle: CSSProperties = { fontFamily: family, fontFeatureSettings: before, fontSize: glyphSize }
   const onStyle: CSSProperties = { fontFamily: family, fontFeatureSettings: after, fontSize: glyphSize }
 
-  // Which tiles actually have a real demo word — others stay non-interactive so
-  // hovering them doesn't pop a bare "same as the tile" proof. Null = not yet
-  // checked (tiles inert until known, so we never flash an active-then-dead tile).
-  const [covered, setCovered] = useState<Set<string> | null>(null)
+  // Lazily pick a demo word per affected item once the grid is shown.
+  const [words, setWords] = useState<Map<string, InlineSample | null> | null>(null)
   useEffect(() => {
     if (!spotlight) {
-      setCovered(null)
+      setWords(null)
       return
     }
     let cancelled = false
-    setCovered(null)
-    coveredItems(affected, isLigature).then((s) => {
-      if (!cancelled) setCovered(s)
+    setWords(null)
+    inlineSamples(affected, isLigature).then((m) => {
+      if (!cancelled) setWords(m)
     })
     return () => {
       cancelled = true
     }
   }, [affected, isLigature, spotlight])
-
-  const { handlers, isActive, overlay } = useGlyphSpotlight({
-    build: (item, attempt) =>
-      buildSpotlight(item, {
-        isLigature,
-        proof: { kind: 'feature', before, after },
-        shaper,
-        attempt,
-      }),
-    cssFamily,
-    size,
-    before: { label: isLigature ? 'no ligatures' : defaultOn ? 'feature off' : 'default', css: { fontFeatureSettings: before } },
-    after: { label: isLigature ? tag : defaultOn ? 'default (on)' : 'feature on', css: { fontFeatureSettings: after } },
-  })
 
   return (
     <div className="mt-3 space-y-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950/50">
@@ -106,50 +90,36 @@ export function AffectedGlyphs({
           )}
           <div className="flex flex-wrap gap-1.5">
             {groups.get(key)!.map((item, i) => {
-              const interactive =
-                spotlight && reLetter.test(item[0] ?? '') && covered !== null && covered.has(item)
-              const inner = (
-                <>
-                  <span style={offStyle} className="text-neutral-400 dark:text-neutral-600">
-                    {item}
-                  </span>
-                  <span className="text-[10px] text-neutral-400 dark:text-neutral-600">→</span>
-                  <span style={onStyle} className="text-neutral-900 dark:text-neutral-100">
-                    {item}
-                  </span>
-                </>
-              )
-              if (!interactive) {
-                return (
-                  <div
-                    key={`${item}-${i}`}
-                    className="flex items-center gap-1 rounded-md border border-neutral-200 bg-white px-2 py-1 dark:border-neutral-800 dark:bg-neutral-900"
-                    title={codepoints(item)}
-                  >
-                    {inner}
-                  </div>
-                )
-              }
+              const sample = words?.get(item)
               return (
-                <button
-                  type="button"
+                <div
                   key={`${item}-${i}`}
-                  {...handlers(item)}
-                  className={`flex items-center gap-1 rounded-md border bg-white px-2 py-1 dark:bg-neutral-900 ${INTERACTIVE_TILE_CLASS} ${
-                    isActive(item)
-                      ? 'border-indigo-400 dark:border-indigo-500'
-                      : 'border-neutral-200 hover:border-indigo-300 dark:border-neutral-800 dark:hover:border-indigo-700'
-                  }`}
+                  className="flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-2 py-1 dark:border-neutral-800 dark:bg-neutral-900"
                   title={codepoints(item)}
                 >
-                  {inner}
-                </button>
+                  <span className="flex items-center gap-1">
+                    <span style={offStyle} className="text-neutral-400 dark:text-neutral-600">
+                      {item}
+                    </span>
+                    <span className="text-[10px] text-neutral-400 dark:text-neutral-600">→</span>
+                    <span style={onStyle} className="text-neutral-900 dark:text-neutral-100">
+                      {item}
+                    </span>
+                  </span>
+                  {sample && (
+                    <span
+                      style={onStyle}
+                      className="border-l border-neutral-200 pl-2 text-neutral-700 dark:border-neutral-800 dark:text-neutral-300"
+                    >
+                      {highlightRanges(sample.text, sample.range ? [sample.range] : undefined)}
+                    </span>
+                  )}
+                </div>
               )
             })}
           </div>
         </div>
       ))}
-      {overlay}
     </div>
   )
 }

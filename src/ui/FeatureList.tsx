@@ -1,6 +1,5 @@
 import type { FeatureInfo } from '../core/types'
 import type { FeatureSample } from '../samples'
-import type { Shaper } from '../core/shape'
 import { FeatureCard } from './FeatureCard'
 
 export function FeatureList({
@@ -8,13 +7,11 @@ export function FeatureList({
   samples = new Map(),
   cssFamily,
   size,
-  shaper,
 }: {
   features: FeatureInfo[]
   samples?: Map<string, FeatureSample>
   cssFamily: string
   size?: number
-  shaper?: Shaper
 }) {
   if (features.length === 0) {
     return (
@@ -42,7 +39,6 @@ export function FeatureList({
           sample={samples.get(f.tag)}
           cssFamily={cssFamily}
           size={size}
-          shaper={shaper}
         />
       ))}
     </div>

@@ -1,31 +1,27 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import type { LoclLanguageSample } from '../samples'
-import type { Shaper } from '../core/shape'
-import { buildSpotlight, coveredItems } from '../samples/spotlight'
+import { inlineSamples, type InlineSample } from '../samples/spotlight'
 import { highlightRanges } from './highlight'
-import { useGlyphSpotlight, INTERACTIVE_TILE_CLASS, codepoints } from '../ui/GlyphSpotlight'
+import { codepoints } from '../ui/AffectedGlyphs'
 
 // Above this many localized forms, collapse the inventory behind a toggle.
 const INVENTORY_THRESHOLD = 12
-const reLetter = /\p{L}/u
 
 export function LoclPreview({
   cssFamily,
   languages,
   size = 28,
-  shaper,
 }: {
   cssFamily: string
   languages: LoclLanguageSample[]
   size?: number
-  shaper?: Shaper
 }) {
   const base: CSSProperties = { fontFamily: `"${cssFamily}", system-ui`, fontSize: size, lineHeight: 1.4 }
 
   return (
     <div className="space-y-2">
       {languages.map((l) => (
-        <LangBlock key={l.otTag} lang={l} base={base} cssFamily={cssFamily} size={size} shaper={shaper} />
+        <LangBlock key={l.otTag} lang={l} base={base} cssFamily={cssFamily} size={size} />
       ))}
     </div>
   )
@@ -36,13 +32,11 @@ function LangBlock({
   base,
   cssFamily,
   size,
-  shaper,
 }: {
   lang: LoclLanguageSample
   base: CSSProperties
   cssFamily: string
   size: number
-  shaper?: Shaper
 }) {
   const [showAll, setShowAll] = useState(false)
   // font-language-override takes the OT language system tag directly — the
@@ -84,7 +78,7 @@ function LangBlock({
             </button>
           )}
           {(!collapsible || showAll) && (
-            <Inventory lang={l} base={base} localized={localized} cssFamily={cssFamily} size={size} shaper={shaper} />
+            <Inventory lang={l} base={base} localized={localized} cssFamily={cssFamily} size={size} />
           )}
         </div>
       )}
@@ -93,9 +87,9 @@ function LangBlock({
 }
 
 /**
- * Every localized input char shown default → localized form. Letter tiles are
- * interactive: hover pops a real word with that char proofed default → localized
- * (font-language-override) — the same spotlight as the affected-glyphs grid.
+ * Every localized input char shown default → localized form, plus — when a real
+ * word contains it — that word rendered localized (font-language-override) with
+ * the char highlighted, so you see the localized form in living text.
  */
 function Inventory({
   lang: l,
@@ -103,83 +97,60 @@ function Inventory({
   localized,
   cssFamily,
   size,
-  shaper,
 }: {
   lang: LoclLanguageSample
   base: CSSProperties
   localized: CSSProperties
   cssFamily: string
   size: number
-  shaper?: Shaper
 }) {
   const glyphSize = Math.min(size, 30)
   const off: CSSProperties = { ...base, fontFamily: `"${cssFamily}", system-ui`, fontSize: glyphSize }
   const on: CSSProperties = { ...localized, fontFamily: `"${cssFamily}", system-ui`, fontSize: glyphSize }
 
-  const [covered, setCovered] = useState<Set<string> | null>(null)
+  const [words, setWords] = useState<Map<string, InlineSample | null> | null>(null)
   useEffect(() => {
     let cancelled = false
-    setCovered(null)
-    coveredItems(l.affected, false).then((s) => {
-      if (!cancelled) setCovered(s)
+    setWords(null)
+    inlineSamples(l.affected, false).then((m) => {
+      if (!cancelled) setWords(m)
     })
     return () => {
       cancelled = true
     }
   }, [l.affected])
 
-  const { handlers, isActive, overlay } = useGlyphSpotlight({
-    build: (item, attempt) =>
-      buildSpotlight(item, { proof: { kind: 'locl', bcp47: l.bcp47 }, shaper, attempt }),
-    cssFamily,
-    size,
-    before: { label: 'default', css: {} },
-    after: { label: l.name, css: { fontLanguageOverride: `"${l.otTag.trim()}"` }, lang: l.bcp47 },
-  })
-
   return (
     <div className="flex flex-wrap gap-1.5">
       {l.affected.map((ch, i) => {
-        const interactive = reLetter.test(ch[0] ?? '') && covered !== null && covered.has(ch)
-        const inner = (
-          <>
-            <span style={off} className="text-neutral-400 dark:text-neutral-600">
-              {ch}
-            </span>
-            <span className="text-[10px] text-neutral-400 dark:text-neutral-600">→</span>
-            <span style={on} className="text-neutral-900 dark:text-neutral-100" lang={l.bcp47}>
-              {ch}
-            </span>
-          </>
-        )
-        if (!interactive) {
-          return (
-            <div
-              key={`${ch}-${i}`}
-              className="flex items-center gap-1 rounded-md border border-neutral-200 bg-white px-2 py-1 dark:border-neutral-800 dark:bg-neutral-900"
-              title={codepoints(ch)}
-            >
-              {inner}
-            </div>
-          )
-        }
+        const sample = words?.get(ch)
         return (
-          <button
-            type="button"
+          <div
             key={`${ch}-${i}`}
-            {...handlers(ch)}
-            className={`flex items-center gap-1 rounded-md border bg-white px-2 py-1 dark:bg-neutral-900 ${INTERACTIVE_TILE_CLASS} ${
-              isActive(ch)
-                ? 'border-indigo-400 dark:border-indigo-500'
-                : 'border-neutral-200 hover:border-indigo-300 dark:border-neutral-800 dark:hover:border-indigo-700'
-            }`}
+            className="flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-2 py-1 dark:border-neutral-800 dark:bg-neutral-900"
             title={codepoints(ch)}
           >
-            {inner}
-          </button>
+            <span className="flex items-center gap-1">
+              <span style={off} className="text-neutral-400 dark:text-neutral-600">
+                {ch}
+              </span>
+              <span className="text-[10px] text-neutral-400 dark:text-neutral-600">→</span>
+              <span style={on} className="text-neutral-900 dark:text-neutral-100" lang={l.bcp47}>
+                {ch}
+              </span>
+            </span>
+            {sample && (
+              <span
+                style={on}
+                lang={l.bcp47}
+                className="border-l border-neutral-200 pl-2 text-neutral-700 dark:border-neutral-800 dark:text-neutral-300"
+              >
+                {highlightRanges(sample.text, sample.range ? [sample.range] : undefined)}
+              </span>
+            )}
+          </div>
         )
       })}
-      {overlay}
     </div>
   )
 }
