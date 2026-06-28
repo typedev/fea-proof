@@ -476,6 +476,31 @@ export async function prepareSamples(
       continue
     }
 
+    // ordn built from digit+letter ligatures (1er/1st/1e + Cyrillic 1е/1й/1я):
+    // show a fixed "1a 2o" for the feminine/masculine ª/º, then the font's own
+    // digit-bearing forms VERBATIM — never word-picked (proofing "a"/"o" on
+    // "hija domani" is meaningless: they're ordinals, not letters in words).
+    if (feature.tag === 'ordn' && feature.tables.includes('GSUB') && feature.gsubLookupTypes.includes(4)) {
+      const { sequences } = reconstructLigatures(font, feature, reverse, graph)
+      const digitSeqs = [...new Set(sequences.filter((s) => /\p{Nd}/u.test(s)))].sort()
+      if (digitSeqs.length > 0) {
+        const hasAO = sequences.some((s) => /^[aoAO]$/.test(s))
+        const text = [...(hasAO ? ['1a 2o'] : []), ...digitSeqs.slice(0, 24)].join('  ')
+        const { before, after } = figureFeatures('ordn')
+        result.set('ordn', {
+          tag: 'ordn',
+          kind: 'single',
+          text,
+          usedCoverage: false,
+          affected: sequences,
+          highlightRanges: shapingHighlight(shaper, text, { features: before }, { features: after }, undefined, false),
+          settings: figureBeforeAfter('ordn'),
+        })
+        noteScripts(sequences.flatMap((s) => [...s]))
+        continue
+      }
+    }
+
     // Dispatch by ACTUAL lookup types, not by tag (fonts vary). A feature can mix
     // kinds: collect its contextual examples (type 5/6) AND its primary
     // ligature (type 4) / single (type 1) preview.
