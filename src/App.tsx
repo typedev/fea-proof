@@ -158,7 +158,7 @@ function Loaded({
         hasCombinations={combinations.length > 0}
         hasOrphans={orphans.length > 0}
       />
-      <FeatureList features={features} samples={samples} cssFamily={loaded.cssFamily} size={size} />
+      <FeatureList features={features} samples={samples} cssFamily={loaded.cssFamily} size={size} shaper={shaper} />
       <CombinationExplorer
         groups={combinations}
         cssFamily={loaded.cssFamily}

@@ -1,12 +1,13 @@
 import { useState, type ReactNode } from 'react'
 import type { FeatureInfo } from '../core/types'
 import type { FeatureSample } from '../samples'
+import type { Shaper } from '../core/shape'
 import { Preview } from '../render/Preview'
 import { LoclPreview } from '../render/LoclPreview'
 import { AffectedGlyphs } from './AffectedGlyphs'
 import { ContextualExamples } from './ContextualExamples'
 import { AltGrid } from './AltGrid'
-import { ligatureBeforeAfter } from '../render/featureSettings'
+import { ligatureBeforeAfter, isFigureLikeFeature } from '../render/featureSettings'
 
 // Above this many affected glyphs the word sample can't show them all, so offer
 // the full inventory.
@@ -52,11 +53,13 @@ export function FeatureCard({
   sample,
   cssFamily,
   size = 30,
+  shaper,
 }: {
   feature: FeatureInfo
   sample?: FeatureSample
   cssFamily: string
   size?: number
+  shaper?: Shaper
 }) {
   const kinds = feature.gsubLookupTypes.map((t) => LOOKUP_KIND[t] ?? `type ${t}`)
   const [showAll, setShowAll] = useState(false)
@@ -107,7 +110,7 @@ export function FeatureCard({
         <div className="mt-3 text-xs text-neutral-400 dark:text-neutral-600">{noPreviewReason(feature)}</div>
       ) : sample.kind === 'locl' ? (
         <div className="mt-3">
-          <LoclPreview cssFamily={cssFamily} languages={sample.languages} size={size} />
+          <LoclPreview cssFamily={cssFamily} languages={sample.languages} size={size} shaper={shaper} />
         </div>
       ) : sample.kind === 'alternates' ? (
         <div className="mt-3">
@@ -158,6 +161,8 @@ export function FeatureCard({
                       size={size}
                       isLigature={sample.kind === 'ligature'}
                       settings={sample.settings}
+                      shaper={shaper}
+                      spotlight={!isFigureLikeFeature(feature.tag)}
                     />
                   )}
                 </>

@@ -38,6 +38,15 @@ const FIGURE_FEATURES = [
   'ordn', 'ords', 'zero', 'frac', 'afrc', 'expt', 'aalt', 'salt',
 ]
 
+/**
+ * Numeric / figure-position features (digits, fractions, super/subscripts,
+ * ordinals). Their glyphs are digits or figure-style letters, so the per-glyph
+ * real-word spotlight doesn't apply — they're proofed on numeric templates.
+ */
+export function isFigureLikeFeature(tag: string): boolean {
+  return FIGURE_FEATURES.includes(tag)
+}
+
 export function figureBeforeAfter(tag: string): { before: string; after: string } {
   const group = [...new Set([...FIGURE_FEATURES, tag])]
   const before = group.map((t) => `"${t}" 0`).join(', ')

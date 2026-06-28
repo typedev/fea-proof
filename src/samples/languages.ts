@@ -33,11 +33,16 @@ export const LANGUAGES: LanguageInfo[] = [
   { code: 'se', name: 'Northern Sami', script: 'latn', bcp47: 'se', otTags: ['NSM'] },
   { code: 'sms', name: 'Skolt Sami', script: 'latn', bcp47: 'sms', otTags: ['SKS'] },
   { code: 'la', name: 'Latin', script: 'latn', bcp47: 'la', otTags: ['LAT'] },
+  { code: 'vi', name: 'Vietnamese', script: 'latn', bcp47: 'vi', otTags: ['VIT'] },
   { code: 'ru', name: 'Russian', script: 'cyrl', bcp47: 'ru', otTags: ['RUS'] },
   { code: 'uk', name: 'Ukrainian', script: 'cyrl', bcp47: 'uk', otTags: ['UKR'] },
   { code: 'bg', name: 'Bulgarian', script: 'cyrl', bcp47: 'bg', otTags: ['BGR'] },
   { code: 'mk', name: 'Macedonian', script: 'cyrl', bcp47: 'mk', otTags: ['MKD'] },
   { code: 'sr-Cyrl', name: 'Serbian (Cyrillic)', script: 'cyrl', bcp47: 'sr-Cyrl', otTags: ['SRB'] },
+  // Kazakh is primarily written in Cyrillic (Latin is only emerging); the
+  // FrequencyWords corpus is Cyrillic. The Latin entry (kk-Latn, under latn)
+  // has no corpus and falls back to the general bank + inventory.
+  { code: 'kk', name: 'Kazakh', script: 'cyrl', bcp47: 'kk', otTags: ['KAZ'] },
   { code: 'ba', name: 'Bashkir', script: 'cyrl', bcp47: 'ba', otTags: ['BSH'] },
   { code: 'cu', name: 'Church Slavonic', script: 'cyrl', bcp47: 'cu', otTags: ['CHU'] },
   { code: 'el', name: 'Greek', script: 'grek', bcp47: 'el', otTags: ['ELL'] },
@@ -50,8 +55,8 @@ export const LANGUAGES: LanguageInfo[] = [
 
 /** Languages used (in priority order) to source words for each script. */
 export const PICK_LANGS: Record<Script, string[]> = {
-  latn: ['en', 'de', 'fr', 'es', 'it', 'pl', 'cs', 'ro', 'pt', 'nl', 'hu'],
-  cyrl: ['ru', 'uk', 'bg', 'mk', 'sr-Cyrl'],
+  latn: ['en', 'de', 'fr', 'es', 'it', 'pl', 'cs', 'ro', 'pt', 'nl', 'hu', 'tr', 'ca', 'vi'],
+  cyrl: ['ru', 'uk', 'bg', 'mk', 'sr-Cyrl', 'kk'],
   grek: ['el'],
 }
 
@@ -77,7 +82,29 @@ export async function loadWordBank(scripts: Iterable<Script>): Promise<Record<st
   for (const script of scripts) {
     const codes = PICK_LANGS[script] ?? []
     const lists = await Promise.all(codes.map(loadWordlist))
-    bank[script] = lists.flat()
+    bank[script] = interleave(lists)
   }
   return bank
+}
+
+/**
+ * Round-robin merge of the per-language lists (rank 0 of every language, then
+ * rank 1, …). Concatenating instead (`lists.flat()`) puts all 5000 English words
+ * before any German/Polish word, so the first language dominates every pick and
+ * samples look monotone. Interleaving keeps each language's most frequent words
+ * near the front, mixing vocabulary (and diacritics) across the script.
+ */
+function interleave(lists: string[][]): string[] {
+  const out: string[] = []
+  const max = lists.reduce((m, l) => Math.max(m, l.length), 0)
+  const seen = new Set<string>()
+  for (let rank = 0; rank < max; rank++) {
+    for (const list of lists) {
+      const word = list[rank]
+      if (word === undefined || seen.has(word)) continue
+      seen.add(word)
+      out.push(word)
+    }
+  }
+  return out
 }

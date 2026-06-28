@@ -52,18 +52,37 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
   - `index.ts` — `prepareSamples(font, features)` → `Map<tag, FeatureSample>`; dispatches
     each feature (see "Dispatch" below); builds `locl` per-language samples.
   - `pick.ts` — choose real words covering affected chars (`pickSample`,
-    `pickLigatureSample`), `classifyScript`.
+    `pickLigatureSample`), `classifyScript`. `pickSample` takes an `offset`
+    (rotate the pool) so different features don't all surface the same
+    top-frequency words (callers pass `tagOffset(tag)`), and `minLen` (default 4)
+    to skip 2–3 letter function words — a 2nd pass rescues an otherwise-orphan
+    char with a short word. `findLigatureWord` matches ligature sequences
+    CASE-INSENSITIVELY then refits the word's case (uppercase display ligatures
+    like `AA`/`AND` would otherwise find nothing in lowercase wordlists — this
+    took Zhivov from 5/766 covered to ~670).
+  - `spotlight.ts` — `buildSpotlight`: lazy real-word before/after demo for ONE
+    affected glyph (the hover popover). Word bank is font-INDEPENDENT so it's
+    cached globally; highlight reuses `changedRanges`. Two `proof` modes:
+    `feature` (card CSS settings → HB via `cssToHbFeatures`) and `locl`
+    (default vs BCP-47 language). UI lives in `ui/GlyphSpotlight.tsx`
+    (`useGlyphSpotlight` hook + popover), shared by `AffectedGlyphs` and the
+    `locl` inventory. `coveredItems` pre-checks which tiles actually have a
+    word so the rest render non-interactive (no bare "same as the tile" proof).
   - `languages.ts` — `LanguageInfo[]` (OT-lang tag ↔ name ↔ BCP-47 ↔ wordlist
     `code`, per script), lazy `import.meta.glob` of `wordlists/*.json`. Used
-    only for `locl` matching + word sourcing.
-  - `wordlists/` — bundled FrequencyWords (MIT), trimmed per language.
+    only for `locl` matching + word sourcing. `loadWordBank` **interleaves**
+    languages round-robin (not `flat()`) so no single language dominates picks.
+  - `wordlists/` — bundled FrequencyWords (MIT), trimmed per language (~5k each).
 - `src/render/` — `featureSettings.ts` (before/after `font-feature-settings`:
   plain, ligature isolation, and figure isolation `figureBeforeAfter`/
   `figureFeatures`), `Preview.tsx`, `LoclPreview.tsx` (per-language cells +
-  localized-forms inventory), `highlight.tsx` (mark affected chars).
+  localized-forms inventory, with the per-glyph spotlight on inventory tiles),
+  `highlight.tsx` (mark affected chars).
 - `src/ui/` — `DropZone`, `Header`, `Controls` (sticky bar; hosts `FeatureNav`
   + publishes `--scroll-offset`), `FeatureNav` (jump-list), `FeatureList`,
-  `FeatureCard`, `AffectedGlyphs` (full inventory), `AltGrid` (alternates),
+  `FeatureCard`, `AffectedGlyphs` (full inventory; per-glyph hover spotlight —
+  letters of non-numeric features only, gated by `isFigureLikeFeature`),
+  `AltGrid` (alternates),
   `ContextualExamples`, `CombinationExplorer`, `OrphanGlyphs` (unreachable).
 - `src/App.tsx` — state + layout.
 
@@ -182,8 +201,11 @@ up source edits, or the probe runs stale code.
 ## Deferred (future)
 
 - More scripts (Arabic/Indic/Hebrew); visual design pass.
-- Cyrillic variants of the Turkic locl langs (AZE/KAZ/TAT/CRT are added under
-  `latn` only — a font gating their Cyrillic `locl` would show the bare tag).
+- Cyrillic variants of the Turkic locl langs: `KAZ` now has a Cyrillic entry
+  (`kk`, with a real wordlist — Kazakh is primarily Cyrillic); `AZE`/`TAT`/`CRT`
+  remain `latn`-only, so a font gating their Cyrillic `locl` shows the bare tag.
+- `az` has no FrequencyWords corpus (404 in both 2016/2018), so Azerbaijani `locl`
+  falls back to the general Latin bank + the localized-forms inventory.
 
 Done already: alternates (`ui/AltGrid.tsx`, `font-feature-settings: "<tag>" N`);
 full per-language `locl` inventory; sticky feature navigator; portable

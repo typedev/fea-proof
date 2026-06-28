@@ -7,7 +7,7 @@ import { changedRanges, type Shaper, type ShapeVariant } from '../core/shape'
 import { buildSubstGraph, resolveGlyph, isPUA } from '../core/substitution'
 import { deriveTriggers } from '../core/context'
 import { beforeAfterFeatures, ligatureFeatures, figureBeforeAfter, figureFeatures } from '../render/featureSettings'
-import { classifyScript, pickSample, pickLigatureSample } from './pick'
+import { classifyScript, pickSample, pickLigatureSample, tagOffset } from './pick'
 import { LANGUAGES, loadWordlist, loadWordBank, type LanguageInfo, type Script } from './languages'
 
 export type HighlightRanges = [number, number][]
@@ -546,14 +546,15 @@ export async function prepareSamples(
   for (const item of pending) {
     let text: string
     let usedCoverage = false
+    const offset = tagOffset(item.tag)
     if (item.kind === 'ligature') {
       const script = item.sequences![0] ? classifyScript(item.sequences![0][0]) : null
       const pool = (script && bank[script]) || []
-      ;({ text, usedCoverage } = pickLigatureSample(item.sequences!, pool))
+      ;({ text, usedCoverage } = pickLigatureSample(item.sequences!, pool, { offset }))
     } else if (item.text !== undefined) {
       text = item.text
     } else {
-      ;({ text, usedCoverage } = pickSample(item.chars!, bank))
+      ;({ text, usedCoverage } = pickSample(item.chars!, bank, { offset }))
     }
     result.set(item.tag, {
       tag: item.tag,
