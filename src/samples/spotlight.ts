@@ -9,7 +9,7 @@
 //  - locl:    before/after are font-language-override (default → localized).
 
 import { changedRanges, type Shaper } from '../core/shape'
-import { classifyScript, pickSample, pickLigatureSample, findLigatureWord } from './pick'
+import { classifyScript, pickLigatureSample, findLigatureWord, type SampleResult } from './pick'
 import { loadWordBank, type Script } from './languages'
 
 const HB_SCRIPT: Record<Script, string> = { latn: 'Latn', cyrl: 'Cyrl', grek: 'Grek' }
@@ -57,7 +57,10 @@ export async function coveredItems(items: string[], isLigature: boolean): Promis
     const script = classifyScript(item[0] ?? '')
     const pool = (script && bank[script]) || []
     if (pool.length === 0) continue
-    if (isLigature) {
+    // A multi-codepoint item is a sequence (ligature / restyled-ligature cascade
+    // like Zhivov's "AA"→"AA.liga3"); it needs the whole sequence in a word, not
+    // just its chars — so use the case-insensitive ligature matcher.
+    if (isLigature || [...item].length > 1) {
       if (findLigatureWord(item, pool)) has.add(item)
     } else {
       const lc = item.toLowerCase()
@@ -85,6 +88,49 @@ function rotate<T>(arr: T[], k: number): T[] {
  * different word. Degrades to the bare glyph when no word contains it, and to no
  * highlight when the shaper is unavailable.
  */
+const SPOTLIGHT_TRIES = 6
+const SINGLE_CAND_SCAN = 40000
+
+/**
+ * Candidate demo words for a single char, sampling ALL positions — char at the
+ * word start, end, and middle — interleaved so each position type appears early.
+ * Contextual alternates are positional but in different ways (Circe's ssXX styles
+ * the word-initial letter; a final-form feature triggers word-finally; others
+ * mid-word), so we don't assume which — buildSpotlight's shaping check keeps the
+ * first candidate that genuinely changes. Words are case-fitted to the char.
+ */
+function singleCandidates(char: string, pool: string[], max = 12): string[] {
+  const lc = char.toLowerCase()
+  const upper = char !== lc && char === char.toUpperCase()
+  const fit = (w: string) => (upper ? w.toUpperCase() : w)
+  const starts: string[] = []
+  const ends: string[] = []
+  const mids: string[] = []
+  const limit = Math.min(pool.length, SINGLE_CAND_SCAN)
+  for (let i = 0; i < limit && starts.length + ends.length + mids.length < max * 3; i++) {
+    const w = pool[i]
+    if (w.length < 4 || w.length > 14) continue
+    const idx = w.toLowerCase().indexOf(lc)
+    if (idx < 0) continue
+    const bucket = idx === 0 ? starts : idx + lc.length === w.length ? ends : mids
+    bucket.push(fit(w))
+  }
+  // Interleave start / end / middle so the shaping check sees every position type
+  // within its first few tries, whichever one the feature actually triggers on.
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (let i = 0; i < max; i++) {
+    for (const bucket of [starts, ends, mids]) {
+      const w = bucket[i]
+      if (w && !seen.has(w)) {
+        seen.add(w)
+        out.push(w)
+      }
+    }
+  }
+  return out.slice(0, max)
+}
+
 export async function buildSpotlight(
   item: string,
   opts: { isLigature?: boolean; proof: SpotlightProof; shaper?: Shaper; attempt?: number },
@@ -92,40 +138,49 @@ export async function buildSpotlight(
   const { isLigature = false, proof, shaper, attempt = 0 } = opts
   const bank = await getBank()
   const script = classifyScript(item[0] ?? '')
-  const pool = (script && bank[script]) || []
-  const rotated = rotate(pool, attempt * 7)
+  const basePool = (script && bank[script]) || []
+  // A multi-codepoint item is a sequence (ligature / cascade-restyled ligature),
+  // so it must appear whole in the word — use the ligature matcher, not per-char.
+  const lig = isLigature || [...item].length > 1
+  const hbScript = script ? HB_SCRIPT[script] : undefined
 
-  let text: string
-  let usedCoverage: boolean
-  if (isLigature) {
-    const r = pickLigatureSample([item], rotated, { maxWords: 1, maxBare: 1, offset: 0 })
-    text = r.text
-    usedCoverage = r.usedCoverage
-  } else {
-    const localBank = script ? { [script]: rotated } : {}
-    // minLen 4 so the demo word isn't a 2–3 letter function word.
-    const r = pickSample([item], localBank, { minWords: 1, maxWords: 2, maxChars: 28, minLen: 4 })
-    text = r.text
-    usedCoverage = r.usedCoverage
+  const cands = lig ? null : singleCandidates(item, basePool)
+  const pickWord = (a: number): SampleResult => {
+    if (lig) {
+      const rotated = rotate(basePool, a * 7)
+      return pickLigatureSample([item], rotated, { maxWords: 1, maxBare: 1 })
+    }
+    if (!cands || cands.length === 0) return { text: item, usedCoverage: true }
+    return { text: cands[a % cands.length], usedCoverage: false }
   }
 
-  let highlightRanges: [number, number][] | undefined
-  if (shaper && text) {
+  const variants =
+    proof.kind === 'feature'
+      ? ([{ features: cssToHbFeatures(proof.before) }, { features: cssToHbFeatures(proof.after) }] as const)
+      : ([{ language: 'en' }, { language: proof.bcp47 ?? 'en' }] as const)
+  const canDiff = !!shaper && !(proof.kind === 'locl' && !proof.bcp47)
+  const rangesFor = (text: string): [number, number][] | undefined => {
+    if (!canDiff || !text) return undefined
     try {
-      const hbScript = script ? HB_SCRIPT[script] : undefined
-      const [before, after] =
-        proof.kind === 'feature'
-          ? [{ features: cssToHbFeatures(proof.before) }, { features: cssToHbFeatures(proof.after) }]
-          : [{ language: 'en' }, { language: proof.bcp47 ?? 'en' }]
-      const ranges =
-        proof.kind === 'locl' && !proof.bcp47
-          ? [] // can't diff without a BCP-47 language
-          : changedRanges(shaper, text, before, after, hbScript)
-      if (ranges.length > 0) highlightRanges = ranges
+      const r = changedRanges(shaper!, text, variants[0], variants[1], hbScript)
+      return r.length > 0 ? r : undefined
     } catch {
-      // shaping failed — show the word without highlight
+      return undefined
     }
   }
 
-  return { text, highlightRanges, usedCoverage }
+  // Try a few words and prefer one where the substitution ACTUALLY happens (the
+  // shaping diff is non-empty). Contextual features (e.g. Circe's word-initial
+  // ssXX) don't fire on every position, so the first word may show no change.
+  const tries = canDiff ? SPOTLIGHT_TRIES : 1
+  let fallback: Spotlight | null = null
+  for (let k = 0; k < tries; k++) {
+    const r = pickWord(attempt * tries + k)
+    if (!r.text) continue
+    const ranges = rangesFor(r.text)
+    if (!fallback) fallback = { text: r.text, highlightRanges: ranges, usedCoverage: r.usedCoverage }
+    if (r.usedCoverage) break // bare glyph — no real word exists, stop trying
+    if (ranges) return { text: r.text, highlightRanges: ranges, usedCoverage: false }
+  }
+  return fallback ?? { text: item, usedCoverage: true }
 }

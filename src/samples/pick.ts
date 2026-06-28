@@ -149,11 +149,21 @@ const LIG_SCAN_LIMIT = 40000
  * (preserves a lowercase word, handles mixed case like "Th" → "The"). Prefers a
  * word longer than the sequence (real context) over a bare-ish match.
  */
+const reLower = /\p{Ll}/u
+const reUpper = /\p{Lu}/u
+
 export function findLigatureWord(seq: string, pool: string[]): string | null {
   const seqLower = seq.toLowerCase()
   const allUpper = seq !== seqLower && seq === seq.toUpperCase()
   const fit = (w: string, idx: number) =>
     allUpper ? w.toUpperCase() : w.slice(0, idx) + seq + w.slice(idx + seq.length)
+
+  // Reject a splice that would put a lowercase letter directly left of an
+  // uppercase one (e.g. "No" spliced into "piano" → "pia№"): only accept an
+  // uppercase-initial sequence at a word boundary. Whole-word uppercasing
+  // (allUpper) never creates such a seam.
+  const seamOk = (w: string, idx: number) =>
+    allUpper || idx === 0 || !reUpper.test(seq[0]) || !reLower.test(w[idx - 1])
 
   let fallback: string | null = null
   const limit = Math.min(pool.length, LIG_SCAN_LIMIT)
@@ -161,7 +171,7 @@ export function findLigatureWord(seq: string, pool: string[]): string | null {
     const w = pool[i]
     if (w.length > 14) continue
     const idx = w.toLowerCase().indexOf(seqLower)
-    if (idx < 0) continue
+    if (idx < 0 || !seamOk(w, idx)) continue
     if (w.length >= seq.length + 2) return fit(w, idx) // long enough for context
     if (!fallback) fallback = fit(w, idx)
   }
