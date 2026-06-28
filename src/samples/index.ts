@@ -452,7 +452,11 @@ export async function prepareSamples(
     // These are always handled here, never via the cascade path; if the isolated
     // toggle changes nothing (e.g. lnum on an already-lining font) the proof is
     // honestly identical, flagged inert for a note.
-    if (FIGURE_TEMPLATES[feature.tag]) {
+    // ordn with type-4 ligatures builds a rich, font-specific ordinal set
+    // (1er/1st/1e + Cyrillic 1е/1й/1я + a→ª/o→º); show THOSE via the ligature
+    // path, not the fixed template (which can't enumerate them). The template is
+    // only for type-1 / contextual ordn (every-letter superscript, a/o-after-digit).
+    if (FIGURE_TEMPLATES[feature.tag] && !(feature.tag === 'ordn' && feature.gsubLookupTypes.includes(4))) {
       const template = FIGURE_TEMPLATES[feature.tag]
       const { before, after } = figureFeatures(feature.tag)
       const inert =
