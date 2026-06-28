@@ -76,6 +76,11 @@ const FIGURE_TEMPLATES: Record<string, string> = {
   afrc: '1/2 1/3 2/3 1/4 3/4 1/5 2/5 3/5 4/5 1/6 5/6 1/7 1/8 3/8 5/8 7/8 1/9 1/10 21/100',
   numr: '0123456789',
   dnom: '0123456789',
+  // Ordinals act on a letter AFTER a figure — a number+letter context, not a
+  // word: Romance feminine/masculine 1ª/2º (the canonical a/o forms), French/
+  // Portuguese 3e/4me, English 5th, plus the "No."→№ numero ligature some fonts
+  // build. Proofing ordn on a dictionary word (every letter raised) is useless.
+  ordn: '1a 2o 3e 4me No. 5th',
 }
 
 function matchLanguage(otTag: string, script: string): LanguageInfo | undefined {
@@ -585,7 +590,10 @@ export async function prepareSamples(
         { features: item.before },
         { features: item.after },
         undefined,
-        item.kind !== 'ligature', // ligatures: don't gate by ratio
+        // Ratio-gate only real words (skip highlight when ~everything changes).
+        // Ligatures and coverage strings (a bare symbol/digit a feature alters,
+        // no word found) ARE the affected glyphs, so highlight them in full.
+        item.kind !== 'ligature' && !usedCoverage,
       ),
       examples: item.examples && item.examples.length > 0 ? item.examples : undefined,
       settings: item.settings,
