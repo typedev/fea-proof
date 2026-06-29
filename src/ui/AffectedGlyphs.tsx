@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import { beforeAfterSettings, ligatureBeforeAfter, positionalRole } from '../render/featureSettings'
+import { beforeAfterSettings, ligatureBeforeAfter, positionalRole, LIGATURES_OFF } from '../render/featureSettings'
 import { classifyScript } from '../samples/pick'
 import { inlineSamples, type InlineSample } from '../samples/spotlight'
 import { highlightRanges } from '../render/highlight'
@@ -116,7 +116,7 @@ export function AffectedGlyphs({
                       style={onStyle}
                       className="border-l border-neutral-200 pl-2 text-neutral-700 dark:border-neutral-800 dark:text-neutral-300"
                     >
-                      {highlightRanges(sample.text, sample.ranges)}
+                      {highlightRanges(sample.text, sample.ranges, false, { plain: LIGATURES_OFF, target: after })}
                     </span>
                   )}
                 </div>

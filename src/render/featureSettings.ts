@@ -14,6 +14,14 @@ export function beforeAfterSettings(tag: string, defaultOn: boolean): { before: 
 const LIGATURE_FEATURES = ['liga', 'clig', 'dlig', 'hlig', 'rlig']
 
 /**
+ * Every standard ligature turned OFF. Rendered around a highlighted target in a
+ * demo word so a greedy/longer ligature can't absorb it (ligatures apply before
+ * ssXX/cvXX and run left-to-right, so e.g. "MAAR" ligates MA+AR and the target
+ * "AA" never forms). The target itself is rendered separately with its own feature.
+ */
+export const LIGATURES_OFF = LIGATURE_FEATURES.map((t) => `"${t}" 0`).join(', ')
+
+/**
  * Isolated before/after for a ligature feature: standard ligatures (liga/clig)
  * are default-on, so they'd ligate on BOTH sides and hide the difference. So we
  * turn ALL ligature features off for "before" (components shown separately) and

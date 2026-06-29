@@ -1,4 +1,12 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
+
+/** Per-segment `font-feature-settings` for isolating a highlighted target. */
+export interface SegmentSettings {
+  /** Applied AROUND the target (ligatures off, so nothing absorbs it). */
+  plain: string
+  /** Applied ON the target (its own feature), in its own shaping run. */
+  target: string
+}
 
 /**
  * Render sample text, wrapping the given character ranges (from a HarfBuzz shaping
@@ -11,13 +19,19 @@ import type { ReactNode } from 'react'
  * sizes). Line breaks still happen at the spaces BETWEEN tokens.
  *
  * `isolate` additionally makes each token an `inline-block`, giving it its own
- * shaping run. Use it ONLY for self-contained tokens (figure/ordinal samples):
- * it stops a script-neutral digit from inheriting a neighbour token's script
- * (mixed Latin/Cyrillic ordinals like `4th` next to `4й` would otherwise not
- * ligate), but it also severs cross-space context, so it must NOT be used where a
- * proof depends on it (contextual / positional / swash-final words).
+ * shaping run. Use it ONLY for self-contained tokens (figure/ordinal samples).
+ *
+ * `segments` gives the highlighted target its OWN `font-feature-settings` (its
+ * feature) and the surrounding text ligatures-off, each as a separate inline run.
+ * This stops a greedy/longer ligature from swallowing the target so the demo shows
+ * exactly the substitution it claims to (e.g. the `AA` ligature, not `MA`+`AR`).
  */
-export function highlightRanges(text: string, ranges?: [number, number][], isolate = false): ReactNode {
+export function highlightRanges(
+  text: string,
+  ranges?: [number, number][],
+  isolate = false,
+  segments?: SegmentSettings,
+): ReactNode {
   if (text.length === 0) return text
   const sorted = ranges && ranges.length ? [...ranges].sort((a, b) => a[0] - b[0]) : []
   const tokenClass = isolate ? 'inline-block whitespace-nowrap align-baseline' : 'whitespace-nowrap'
@@ -39,11 +53,11 @@ export function highlightRanges(text: string, ranges?: [number, number][], isola
     } else if (multiToken) {
       nodes.push(
         <span key={key.n++} className={tokenClass}>
-          {renderMarks(text, i, j, sorted, key)}
+          {renderMarks(text, i, j, sorted, key, segments)}
         </span>,
       )
     } else {
-      nodes.push(<span key={key.n++}>{renderMarks(text, i, j, sorted, key)}</span>)
+      nodes.push(<span key={key.n++}>{renderMarks(text, i, j, sorted, key, segments)}</span>)
     }
     i = j
   }
@@ -57,8 +71,22 @@ function renderMarks(
   end: number,
   sorted: [number, number][],
   key: { n: number },
+  segments?: SegmentSettings,
 ): ReactNode {
-  if (sorted.length === 0) return text.slice(start, end)
+  const plainStyle: CSSProperties | undefined = segments ? { fontFeatureSettings: segments.plain } : undefined
+  const targetStyle: CSSProperties | undefined = segments ? { fontFeatureSettings: segments.target } : undefined
+  // Around-the-target text: a styled span (its own ligatures-off run) when
+  // isolating, otherwise a bare string.
+  const plain = (s: string): ReactNode =>
+    segments ? (
+      <span key={key.n++} style={plainStyle}>
+        {s}
+      </span>
+    ) : (
+      s
+    )
+
+  if (sorted.length === 0) return plain(text.slice(start, end))
   const out: ReactNode[] = []
   let pos = start
   for (const [rs, re] of sorted) {
@@ -66,15 +94,15 @@ function renderMarks(
     const e = Math.min(re, end)
     if (e <= s) continue
     if (s >= end) break
-    if (s > pos) out.push(text.slice(pos, s))
+    if (s > pos) out.push(plain(text.slice(pos, s)))
     out.push(
-      <mark key={key.n++} className="rounded-sm bg-indigo-500/25 text-inherit">
+      <mark key={key.n++} style={targetStyle} className="rounded-sm bg-indigo-500/25 text-inherit">
         {text.slice(s, e)}
       </mark>,
     )
     pos = e
   }
-  if (out.length === 0) return text.slice(start, end)
-  if (pos < end) out.push(text.slice(pos, end))
+  if (out.length === 0) return plain(text.slice(start, end))
+  if (pos < end) out.push(plain(text.slice(pos, end)))
   return out
 }

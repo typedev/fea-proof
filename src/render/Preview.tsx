@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
-import { beforeAfterSettings } from './featureSettings'
-import { highlightRanges } from './highlight'
+import { beforeAfterSettings, LIGATURES_OFF } from './featureSettings'
+import { highlightRanges, type SegmentSettings } from './highlight'
 import { useVariationSettings } from './variationContext'
 
 interface PreviewProps {
@@ -35,10 +35,16 @@ export function Preview({ cssFamily, text, tag, defaultOn, size = 30, lang, labe
     : { before: 'default', after: 'feature on' }
   const finalLabels = labels ?? defaultLabels
 
+  // Isolate the highlighted target in the "after" cell so a greedy/longer ligature
+  // can't absorb it (ligatures run before ssXX/cvXX). Skip for figure/ordinal
+  // samples (isolate) — they already isolate per token — and when nothing is marked.
+  const afterSegments: SegmentSettings | undefined =
+    ranges && ranges.length && !isolate ? { plain: LIGATURES_OFF, target: after } : undefined
+
   return (
     <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-neutral-200 dark:bg-neutral-800">
       <Cell label={finalLabels.before} text={text} ranges={ranges} isolate={isolate} style={{ ...base, fontFeatureSettings: before }} />
-      <Cell label={finalLabels.after} text={text} ranges={ranges} isolate={isolate} style={{ ...base, fontFeatureSettings: after }} lang={lang} />
+      <Cell label={finalLabels.after} text={text} ranges={ranges} isolate={isolate} segments={afterSegments} style={{ ...base, fontFeatureSettings: after }} lang={lang} />
     </div>
   )
 }
@@ -50,6 +56,7 @@ function Cell({
   lang,
   ranges,
   isolate,
+  segments,
 }: {
   label: string
   text: string
@@ -57,12 +64,13 @@ function Cell({
   lang?: string
   ranges?: [number, number][]
   isolate?: boolean
+  segments?: SegmentSettings
 }) {
   return (
     <div className="bg-white p-4 dark:bg-neutral-950">
       <div className="mb-2 text-[11px] uppercase tracking-wide text-neutral-500">{label}</div>
       <div style={style} className="break-words text-neutral-900 dark:text-neutral-100" lang={lang}>
-        {highlightRanges(text, ranges, isolate)}
+        {highlightRanges(text, ranges, isolate, segments)}
       </div>
     </div>
   )
