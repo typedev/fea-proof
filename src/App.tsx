@@ -19,6 +19,9 @@ import { CombinationExplorer } from './ui/CombinationExplorer'
 import { Controls } from './ui/Controls'
 import { rvrnSubstitutionGroups } from './core/featureVariations'
 import { readAvarSegments, inConditionCoords } from './core/coords'
+import { buildMarkInventory, hasMarkInventory } from './core/marks'
+import { MarkExplorer } from './ui/MarkExplorer'
+import type { FeatureInfo } from './core/types'
 import { FeatureVariationsContext, type FeatureVariationsData } from './render/featureVariationsContext'
 
 type Theme = 'light' | 'dark'
@@ -130,6 +133,13 @@ function Loaded({
   }, [variations])
   const varSettings = useMemo(() => toVariationSettings(coords), [coords])
 
+  // Mark·mkmk explorer: base/mark inventory (from GDEF), and which feature opened it.
+  const markInventory = useMemo(
+    () => buildMarkInventory(loaded.font, buildReverseCmap(loaded.font)),
+    [loaded],
+  )
+  const [markExplorer, setMarkExplorer] = useState<FeatureInfo | null>(null)
+
   // GSUB FeatureVariations (rvrn): grouped substitutions, keyed by the feature
   // tag they substitute, so each renders inside that feature's (navigable) card.
   const featureVariations = useMemo<FeatureVariationsData | null>(() => {
@@ -214,7 +224,14 @@ function Loaded({
           coords={coords}
           onCoords={setCoords}
         />
-        <FeatureList features={features} samples={samples} cssFamily={loaded.cssFamily} size={size} shaper={shaper} />
+        <FeatureList
+          features={features}
+          samples={samples}
+          cssFamily={loaded.cssFamily}
+          size={size}
+          shaper={shaper}
+          onOpenMarkExplorer={hasMarkInventory(markInventory) ? setMarkExplorer : undefined}
+        />
         <CombinationExplorer
           groups={combinations}
           cssFamily={loaded.cssFamily}
@@ -223,6 +240,9 @@ function Loaded({
         />
         <OrphanGlyphs font={loaded.font} gids={orphans} size={size} />
       </div>
+      {markExplorer && (
+        <MarkExplorer font={loaded.font} sfnt={loaded.sfnt} onClose={() => setMarkExplorer(null)} />
+      )}
       </FeatureVariationsContext.Provider>
     </VariationSettingsContext.Provider>
   )

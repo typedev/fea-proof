@@ -9,12 +9,14 @@ export function FeatureList({
   cssFamily,
   size,
   shaper,
+  onOpenMarkExplorer,
 }: {
   features: FeatureInfo[]
   samples?: Map<string, FeatureSample>
   cssFamily: string
   size?: number
   shaper?: Shaper
+  onOpenMarkExplorer?: (feature: FeatureInfo) => void
 }) {
   if (features.length === 0) {
     return (
@@ -43,6 +45,7 @@ export function FeatureList({
           cssFamily={cssFamily}
           size={size}
           shaper={shaper}
+          onOpenMarkExplorer={onOpenMarkExplorer}
         />
       ))}
     </div>

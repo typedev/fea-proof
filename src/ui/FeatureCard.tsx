@@ -56,13 +56,16 @@ export function FeatureCard({
   cssFamily,
   size = 30,
   shaper,
+  onOpenMarkExplorer,
 }: {
   feature: FeatureInfo
   sample?: FeatureSample
   cssFamily: string
   size?: number
   shaper?: Shaper
+  onOpenMarkExplorer?: (feature: FeatureInfo) => void
 }) {
+  const isMarkFeature = feature.tag === 'mark' || feature.tag === 'mkmk'
   const kinds = feature.gsubLookupTypes.map((t) => LOOKUP_KIND[t] ?? `type ${t}`)
   const [showAll, setShowAll] = useState(false)
   const fv = useFeatureVariations()
@@ -184,7 +187,14 @@ export function FeatureCard({
           )}
         </div>
         )
-      ) : hasFvGroups ? null : (
+      ) : hasFvGroups ? null : isMarkFeature && onOpenMarkExplorer ? (
+        <button
+          onClick={() => onOpenMarkExplorer(feature)}
+          className="mt-3 text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+        >
+          Open mark explorer →
+        </button>
+      ) : (
         <div className="mt-3 text-xs text-neutral-400 dark:text-neutral-600">{noPreviewReason(feature)}</div>
       )}
       {fv && hasFvGroups && (
