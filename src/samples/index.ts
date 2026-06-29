@@ -445,41 +445,16 @@ export async function prepareSamples(
 
     if (!feature.tables.includes('GSUB') || feature.ignored || SKIP.has(feature.tag)) continue
 
-    // Figure features: fixed numeric template, proofed in ISOLATION — every other
-    // figure-style/width/position feature (and aalt/salt) is turned off so the
-    // "before" is the font's nominal figures and "after" toggles only this one.
-    // Without isolation a sibling (or the aalt catch-all) leaks into "default".
-    // These are always handled here, never via the cascade path; if the isolated
-    // toggle changes nothing (e.g. lnum on an already-lining font) the proof is
-    // honestly identical, flagged inert for a note.
-    // ordn with type-4 ligatures builds a rich, font-specific ordinal set
-    // (1er/1st/1e + Cyrillic 1е/1й/1я + a→ª/o→º); show THOSE via the ligature
-    // path, not the fixed template (which can't enumerate them). The template is
-    // only for type-1 / contextual ordn (every-letter superscript, a/o-after-digit).
-    if (FIGURE_TEMPLATES[feature.tag] && !(feature.tag === 'ordn' && feature.gsubLookupTypes.includes(4))) {
-      const template = FIGURE_TEMPLATES[feature.tag]
-      const { before, after } = figureFeatures(feature.tag)
-      const inert =
-        !!shaper &&
-        shaper.shape(template, { features: before }).map((g) => g.g).join() ===
-          shaper.shape(template, { features: after }).map((g) => g.g).join()
-      pending.push({
-        tag: feature.tag,
-        kind: 'single',
-        text: template,
-        affected: [],
-        before,
-        after,
-        settings: figureBeforeAfter(feature.tag),
-        note: inert ? "no effect on this font's default figures" : undefined,
-      })
-      continue
-    }
-
     // ordn built from digit+letter ligatures (1er/1st/1e + Cyrillic 1е/1й/1я):
     // show a fixed "1a 2o" for the feminine/masculine ª/º, then the font's own
     // digit-bearing forms VERBATIM — never word-picked (proofing "a"/"o" on
     // "hija domani" is meaningless: they're ordinals, not letters in words).
+    // This MUST run before the figure template: a type-4 ordn that has digit
+    // ligatures gets the rich verbatim set; one whose only ligature is the
+    // numero No.→№ (no digit) has nothing to enumerate, so it falls through to
+    // the template — which proofs the contextual a/o-after-digit ordinals AND
+    // the No.→№ ligature together, instead of word-picking "No" into a dictionary
+    // word ("Noastre") and burying the real ordinals as side examples.
     if (feature.tag === 'ordn' && feature.tables.includes('GSUB') && feature.gsubLookupTypes.includes(4)) {
       const { sequences } = reconstructLigatures(font, feature, reverse, graph)
       const digitSeqs = [...new Set(sequences.filter((s) => /\p{Nd}/u.test(s)))].sort()
@@ -499,6 +474,34 @@ export async function prepareSamples(
         noteScripts(sequences.flatMap((s) => [...s]))
         continue
       }
+    }
+
+    // Figure features: fixed numeric template, proofed in ISOLATION — every other
+    // figure-style/width/position feature (and aalt/salt) is turned off so the
+    // "before" is the font's nominal figures and "after" toggles only this one.
+    // Without isolation a sibling (or the aalt catch-all) leaks into "default".
+    // These are always handled here, never via the cascade path; if the isolated
+    // toggle changes nothing (e.g. lnum on an already-lining font) the proof is
+    // honestly identical, flagged inert for a note. (ordn with an enumerable
+    // digit-ligature set is handled just above and never reaches here.)
+    if (FIGURE_TEMPLATES[feature.tag]) {
+      const template = FIGURE_TEMPLATES[feature.tag]
+      const { before, after } = figureFeatures(feature.tag)
+      const inert =
+        !!shaper &&
+        shaper.shape(template, { features: before }).map((g) => g.g).join() ===
+          shaper.shape(template, { features: after }).map((g) => g.g).join()
+      pending.push({
+        tag: feature.tag,
+        kind: 'single',
+        text: template,
+        affected: [],
+        before,
+        after,
+        settings: figureBeforeAfter(feature.tag),
+        note: inert ? "no effect on this font's default figures" : undefined,
+      })
+      continue
     }
 
     // Dispatch by ACTUAL lookup types, not by tag (fonts vary). A feature can mix
