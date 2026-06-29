@@ -59,7 +59,9 @@ machine.
   card) to compose a base glyph with combining marks and see how the font attaches
   them by anchors, including multi-mark stacking (mkmk). Combinations the font
   doesn't define are greyed out. Composition is anchor-driven (not browser text),
-  so it shows the real attachment instead of collapsing into precomposed glyphs.
+  so it shows the real attachment instead of collapsing into precomposed glyphs —
+  and on variable fonts both the outlines and the anchor attachment follow the
+  axes (sliders are built into the explorer).
 - **Unreachable glyphs** — glyphs with no Unicode mapping that no feature toggle
   can produce, so they can't be typed or reached at all (useful QA signal).
 - **Feature navigator** — a jump-list in the sticky top bar with a chip per
@@ -134,8 +136,6 @@ React + Vite + TypeScript + Tailwind v4. No backend.
 
 ## Roadmap
 
-- Variable-font-accurate marks: make the mark/mkmk explorer follow the axes
-  (interpolated outlines + variable anchors), not just the default instance.
 - More scripts (Arabic, Devanagari, Hebrew — the browser already shapes them; the
   work is sample generation and UI; the mark explorer is already script-agnostic).
 - Visual design pass.

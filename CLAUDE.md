@@ -40,7 +40,11 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
   - `interactions.ts` — `effectiveFeatures`: which toggled features actually change
     the shaping in the current state (live dependency/conflict indication).
   - `shape.ts` — lazy harfbuzzjs (wasm) wrapper: `loadShaper(sfnt)`, `shape()`,
-    `changedRanges()` (character ranges whose shaping differs between two variants).
+    `changedRanges()` (character ranges whose shaping differs between two
+    variants), `setVariations`; plus `loadOutlineFont(sfnt)` — an ISOLATED hb.Font
+    exposing `glyphPath`/`glyphExtents` for VF-interpolated outlines (opentype.js
+    can't interpolate gvar; kept separate so its axis state can't corrupt the
+    shared analysis font).
   - `substitution.ts` — glyph substitution graph (type 1/3/4) + `resolveGlyph`
     (trace non-cmapped glyphs back to base chars + producer features).
   - `context.ts` — `deriveTriggers`: read contextual lookups (type 5/6, Format 3)
@@ -51,10 +55,10 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
     instances), `defaultCoords`; `findTable(sfnt, tag)` raw sfnt table locator
     (shared). Recovers the HIDDEN-axis flag via a manual byte parse — opentype.js
     drops it. `LoadedFont.variations`.
-  - `coords.ts` — normalized↔user-space: `toUserCoord` (avar-inverse via
-    `gdef`/`avar` segment maps, then linear denormalize), `inConditionCoords`
-    (a user-space point inside a rvrn condition, for "apply coordinates"),
-    `readAvarSegments`.
+  - `coords.ts` — normalized↔user-space: `toUserCoord` (avar-inverse + denormalize),
+    `normalizeCoords` (user→normalized: fvar-linear + avar-forward, fvar axis
+    order — for the ItemVariationStore), `inConditionCoords` (a user-space point
+    inside a rvrn condition, for "apply coordinates"), `readAvarSegments`.
   - `featureVariations.ts` — manual DataView parse of GSUB `FeatureVariations`
     (rvrn; opentype.js doesn't expose it): `readFeatureVariations`,
     `rvrnSubstitutionGroups` (base→variant glyph pairs grouped by alternate lookup).
@@ -63,6 +67,11 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
   - `markAnchors.ts` — manual GPOS parse of mark (type 4) + mkmk (type 6)
     attachment (opentype.js returns `{error}` for these): `parseMarkAnchors`,
     `attachToBase`, `attachToMark`, `placeMarks` (anchor-based glyph positioning).
+    For variable fonts: reads anchor fmt3 device VariationIndex + the GDEF
+    ItemVariationStore; `resolveAnchor`/`placeMarks(…, resolve)` move anchors with
+    the axes.
+  - `itemVariationStore.ts` — parse the GDEF ItemVariationStore (`parseItemVariationStore`,
+    incl. LONG_WORDS) + `regionScalar`/`ivsDelta` (variable anchor/metric deltas).
   - `unicodeName.ts` — Unicode standard names; lazily imports the bundled
     `unicodeNames.json` table (CJK derived algorithmically).
   - `types.ts` — shared types.
@@ -242,10 +251,14 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
   offset), hiding real attachment — so we position glyph OUTLINES ourselves
   (`placeMarks` → `ComposedGlyphs`). Math (verified vs HB): mark-to-base
   `markPos = baseAnchor − markAnchor`; mkmk `mark2Pos + mark2Anchor − mark1Anchor`.
-  Marks that can't attach to the selected base / top mark are greyed out. Renders
-  at the DEFAULT instance (opentype `getPath` is default-master only; fmt3 anchor
-  variation deltas ignored) — VF-accurate marks (HB `glyphToPath` + GDEF
-  ItemVariationStore deltas) is the next step.
+  Marks that can't attach to the selected base / top mark are greyed out.
+  **Variable-font-accurate:** the preview follows the axes — outlines via HB
+  `loadOutlineFont`/`glyphToPath` (opentype can't interpolate), anchors via the
+  GDEF ItemVariationStore (`itemVariationStore.ts` + `markAnchors` device
+  VariationIndex + `coords.normalizeCoords`); axis sliders live INSIDE the modal
+  (it covers the page). Verified exact vs HB (`b+macron+acute` @wght900). Both HB
+  `glyphToPath` and opentype raw `glyph.path` are Y-UP (only `getPath()` flips) —
+  `ComposedGlyphs` takes y-up items and flips once. (Columns stay default-master.)
 - **Shared glyph-inventory style + size.** New glyph-grid UIs reuse the common
   tile look (container `bg-neutral-50`, tile `bg-white`, muted base → arrow →
   variant) and the shared size cap `Math.min(size, 30)` — don't invent a new
@@ -291,15 +304,11 @@ up source edits, or the probe runs stale code.
 
 ## Deferred (future)
 
-- **VF-accurate marks (next up):** the mark explorer renders at the default
-  instance. Make it follow the axes — VF outlines via HarfBuzz
-  `font.setVariations(coords)` + `glyphToPath(gid)` (opentype.js can't
-  interpolate), and variable anchors via the GDEF ItemVariationStore (parse +
-  apply deltas to anchor fmt3 at the current normalized coords). Self-contained,
-  medium effort. Re-plumb current coords into `MarkExplorer`.
 - rvrn follow-ups: general conditional-features / axis-space explorer; ConditionTable
-  formats 2/3; avar2 / dozens-of-axes register UI. Mark explorer: >2 mixed
-  above/below stacks (host heuristic), fmt2 anchorPoint, non-cmapped marks, RTL.
+  formats 2/3; avar2 / dozens-of-axes register UI.
+- Mark explorer follow-ups: >2 mixed above/below stacks (the "previous mark" host
+  heuristic), fmt2 anchorPoint, non-cmapped marks, RTL; VF-aware column tiles
+  (currently default-master).
 - More scripts (Arabic/Indic/Hebrew); visual design pass.
 - Cyrillic variants of the Turkic locl langs: `KAZ` now has a Cyrillic entry
   (`kk`, with a real wordlist — Kazakh is primarily Cyrillic); `AZE`/`TAT`/`CRT`
@@ -314,4 +323,4 @@ relative-base deploy; figure-feature isolation + honest cascade labels (swept al
 **variable fonts** (axis sliders + named instances + `font-variation-settings`
 everywhere); **rvrn / FeatureVariations** (conditional substitutions in the
 feature card, with "apply coordinates"); **mark·mkmk explorer** (anchor-based
-composition + validity gating).
+composition + validity gating + variable-font-accurate outlines & anchors).
