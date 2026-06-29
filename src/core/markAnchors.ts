@@ -1,4 +1,5 @@
 import { findTable } from './variations'
+import { ivsDelta, parseItemVariationStore, type VarStore } from './itemVariationStore'
 
 // Raw GPOS parse of mark (MarkBasePos, type 4) and mkmk (MarkMarkPos, type 6)
 // attachment, straight from the sfnt bytes — opentype.js returns {error} for
@@ -8,6 +9,15 @@ import { findTable } from './variations'
 // mark2Pos + mark2Anchor − mark1Anchor.
 
 export interface Anchor {
+  x: number
+  y: number
+  /** Variable fonts: GDEF ItemVariationStore index for the X coord (fmt3 device). */
+  xVar?: { outer: number; inner: number }
+  yVar?: { outer: number; inner: number }
+}
+
+/** A concrete anchor point (variation deltas already resolved). */
+export interface Point {
   x: number
   y: number
 }
@@ -31,6 +41,8 @@ export interface MarkAnchors {
   mkmk: MarkMarkSubtable[]
   hasMark: boolean
   hasMkmk: boolean
+  /** GDEF ItemVariationStore for variable anchor deltas (null if static/absent). */
+  store: VarStore | null
 }
 
 /** {baseAnchor, markAnchor} — for mkmk, baseAnchor is the mark2 anchor. */
@@ -45,11 +57,27 @@ export interface Placed {
   y: number
 }
 
-const EMPTY: MarkAnchors = { base: [], mkmk: [], hasMark: false, hasMkmk: false }
+const EMPTY: MarkAnchors = { base: [], mkmk: [], hasMark: false, hasMkmk: false, store: null }
+
+/** A fmt3 anchor device offset → VariationIndex {outer,inner}, or undefined. */
+function readVarIndex(dv: DataView, off: number): { outer: number; inner: number } | undefined {
+  // VariationIndex: u16 outer (StartSize), u16 inner (EndSize), u16 deltaFormat.
+  // deltaFormat 0x8000 = variation index; 0x0001..0x0003 = a real (static) Device.
+  if (dv.getUint16(off + 4) === 0x8000) return { outer: dv.getUint16(off), inner: dv.getUint16(off + 2) }
+  return undefined
+}
 
 function readAnchor(dv: DataView, off: number): Anchor {
   // formats 1/2/3 all share: u16 format, i16 x, i16 y.
-  return { x: dv.getInt16(off + 2), y: dv.getInt16(off + 4) }
+  const a: Anchor = { x: dv.getInt16(off + 2), y: dv.getInt16(off + 4) }
+  if (dv.getUint16(off) === 3) {
+    // fmt3: Offset16 xDevice @+6, Offset16 yDevice @+8 (rel to anchor start).
+    const xDev = dv.getUint16(off + 6)
+    const yDev = dv.getUint16(off + 8)
+    if (xDev) a.xVar = readVarIndex(dv, off + xDev)
+    if (yDev) a.yVar = readVarIndex(dv, off + yDev)
+  }
+  return a
 }
 
 /** Coverage table → array indexed by coverage index (arr[i] = glyph id). */
@@ -151,7 +179,31 @@ export function parseMarkAnchors(sfnt: ArrayBuffer): MarkAnchors {
   } catch {
     /* malformed — return whatever parsed */
   }
-  return { base, mkmk, hasMark: base.length > 0, hasMkmk: mkmk.length > 0 }
+  return { base, mkmk, hasMark: base.length > 0, hasMkmk: mkmk.length > 0, store: parseGdefVarStore(sfnt) }
+}
+
+/** GDEF ItemVariationStore (v1.3+), for variable anchor deltas. Null if absent. */
+function parseGdefVarStore(sfnt: ArrayBuffer): VarStore | null {
+  try {
+    const gdef = findTable(sfnt, 'GDEF')
+    if (gdef == null) return null
+    const dv = new DataView(sfnt)
+    if (dv.getUint16(gdef + 2) < 3) return null // itemVarStore only in GDEF 1.3+
+    const off = dv.getUint32(gdef + 14) // Offset32, rel GDEF
+    if (off === 0) return null
+    return parseItemVariationStore(dv, gdef + off, sfnt.byteLength)
+  } catch {
+    return null
+  }
+}
+
+/** Resolve an anchor to a concrete point, applying variation deltas at `normCoords`. */
+export function resolveAnchor(a: Anchor, store: VarStore | null, normCoords: number[] | null): Point {
+  if (!store || !normCoords) return { x: a.x, y: a.y }
+  return {
+    x: a.xVar ? a.x + Math.round(ivsDelta(store, a.xVar.outer, a.xVar.inner, normCoords)) : a.x,
+    y: a.yVar ? a.y + Math.round(ivsDelta(store, a.yVar.outer, a.yVar.inner, normCoords)) : a.y,
+  }
 }
 
 /** Can mark attach to base? Returns the anchor pair (first matching subtable). */
@@ -185,10 +237,11 @@ export function placeMarks(
   ma: MarkAnchors,
   baseGid: number,
   markGids: number[],
-): { placed: Placed[]; unplaceable: number[]; anchorsUsed: Anchor[] } {
+  resolve: (a: Anchor) => Point = (a) => ({ x: a.x, y: a.y }),
+): { placed: Placed[]; unplaceable: number[]; anchorsUsed: Point[] } {
   const placed: Placed[] = [{ gid: baseGid, x: 0, y: 0 }]
   const unplaceable: number[] = []
-  const anchorsUsed: Anchor[] = []
+  const anchorsUsed: Point[] = []
   let prev: Placed | null = null
   for (const g of markGids) {
     let pair = prev ? attachToMark(ma, prev.gid, g) : null
@@ -201,12 +254,11 @@ export function placeMarks(
       unplaceable.push(g)
       continue
     }
-    const p: Placed = {
-      gid: g,
-      x: host.x + pair.baseAnchor.x - pair.markAnchor.x,
-      y: host.y + pair.baseAnchor.y - pair.markAnchor.y,
-    }
-    anchorsUsed.push({ x: host.x + pair.baseAnchor.x, y: host.y + pair.baseAnchor.y })
+    // Both base and mark anchors can carry variation deltas — resolve each.
+    const ba = resolve(pair.baseAnchor)
+    const ka = resolve(pair.markAnchor)
+    const p: Placed = { gid: g, x: host.x + ba.x - ka.x, y: host.y + ba.y - ka.y }
+    anchorsUsed.push({ x: host.x + ba.x, y: host.y + ba.y })
     placed.push(p)
     prev = p
   }

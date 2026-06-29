@@ -59,6 +59,43 @@ export function toUserCoord(axis: VariationAxis, segments: AvarSegments, normali
   return denormalize(axis, avarInverse(segments[axis.tag], normalized))
 }
 
+/** Linear-normalize a user value to [−1,1] via fvar min/default/max (pre-avar). */
+function linearNormalize(axis: VariationAxis, user: number): number {
+  const v = Math.max(axis.min, Math.min(axis.max, user))
+  if (v === axis.default) return 0
+  if (v < axis.default) return axis.default === axis.min ? 0 : -(axis.default - v) / (axis.default - axis.min)
+  return axis.max === axis.default ? 0 : (v - axis.default) / (axis.max - axis.default)
+}
+
+/** Apply an avar segment map FORWARD: pre-avar normalized → post-avar normalized. */
+function avarForward(segments: { from: number; to: number }[] | undefined, c: number): number {
+  if (!segments || segments.length < 2) return c
+  const segs = [...segments].sort((a, b) => a.from - b.from) // readAvarSegments sorts by `to`
+  if (c <= segs[0].from) return segs[0].to
+  for (let i = 1; i < segs.length; i++) {
+    const lo = segs[i - 1]
+    const hi = segs[i]
+    if (c <= hi.from) {
+      return hi.from === lo.from ? lo.to : lo.to + ((c - lo.from) * (hi.to - lo.to)) / (hi.from - lo.from)
+    }
+  }
+  return segs[segs.length - 1].to
+}
+
+/**
+ * User-space coords → normalized [−1,1], in fvar axis order (the order an
+ * ItemVariationStore's regions index by). fvar-linear then avar-forward.
+ */
+export function normalizeCoords(
+  coords: Record<string, number>,
+  axes: VariationAxis[],
+  avarSegments: AvarSegments,
+): number[] {
+  return axes.map((axis) =>
+    avarForward(avarSegments[axis.tag], linearNormalize(axis, coords[axis.tag] ?? axis.default)),
+  )
+}
+
 /**
  * A user-space value that lands INSIDE a condition's normalized range. Anchors
  * are exact regardless of avar (min→−1, default→0, max→+1); prefer the default

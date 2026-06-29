@@ -3,10 +3,14 @@ import { createPortal } from 'react-dom'
 import type { Font } from 'opentype.js'
 import { buildReverseCmap } from '../core/glyphs'
 import { buildMarkInventory, type BaseGlyph, type MarkGlyph } from '../core/marks'
-import { parseMarkAnchors, attachToBase, attachToMark, placeMarks } from '../core/markAnchors'
+import { parseMarkAnchors, attachToBase, attachToMark, placeMarks, resolveAnchor, type Anchor } from '../core/markAnchors'
+import { loadOutlineFont, type OutlineFont } from '../core/shape'
+import { normalizeCoords, readAvarSegments } from '../core/coords'
+import type { FontVariations } from '../core/variations'
 import { loadUnicodeNames, unicodeName } from '../core/unicodeName'
-import { ComposedGlyphs } from './ComposedGlyphs'
+import { ComposedGlyphs, type RenderItem } from './ComposedGlyphs'
 import { GlyphOutline } from './GlyphOutline'
+import { AxisControls } from './AxisControls'
 import { codepoints } from './AffectedGlyphs'
 
 type Names = Record<string, string> | null
@@ -22,23 +26,42 @@ type Names = Record<string, string> | null
 export function MarkExplorer({
   font,
   sfnt,
+  variations,
+  coords,
   onClose,
 }: {
   font: Font
   sfnt: ArrayBuffer
+  variations?: FontVariations | null
+  coords?: Record<string, number>
   onClose: () => void
 }) {
   const inv = useMemo(() => buildMarkInventory(font, buildReverseCmap(font)), [font])
   const ma = useMemo(() => parseMarkAnchors(sfnt), [sfnt])
+  const axes = variations?.axes ?? []
+  const instances = variations?.instances ?? []
   const [baseGid, setBaseGid] = useState<number | null>(inv.bases[0]?.gid ?? null)
   const [markGids, setMarkGids] = useState<number[]>([])
   const [tileSize, setTileSize] = useState(44)
   const [showAnchors, setShowAnchors] = useState(true)
   const [names, setNames] = useState<Names>(null)
+  const [localCoords, setLocalCoords] = useState<Record<string, number>>(coords ?? {})
+  const [outlineFont, setOutlineFont] = useState<OutlineFont | null>(null)
+  const useVf = !!outlineFont && axes.length > 0
 
   useEffect(() => {
     loadUnicodeNames().then(setNames).catch(() => undefined)
   }, [])
+
+  // Isolated HB font for variable outlines (axes only); decoupled from the shared shaper.
+  useEffect(() => {
+    if (axes.length === 0) return
+    let cancelled = false
+    loadOutlineFont(sfnt).then((f) => !cancelled && setOutlineFont(f)).catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [sfnt, axes.length])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -75,10 +98,46 @@ export function MarkExplorer({
     return set
   }, [ma, baseGid, topMark, inv])
 
-  const { placed, unplaceable, anchorsUsed } = useMemo(
-    () => (baseGid != null ? placeMarks(ma, baseGid, markGids) : { placed: [], unplaceable: [], anchorsUsed: [] }),
-    [ma, baseGid, markGids],
+  // Variable anchors: resolve at the current axis position (default-instance otherwise).
+  const avarSeg = useMemo(() => (axes.length ? readAvarSegments(font, axes) : {}), [font, axes])
+  const normCoords = useMemo(
+    () => (axes.length ? normalizeCoords(localCoords, axes, avarSeg) : null),
+    [localCoords, axes, avarSeg],
   )
+  const resolve = useMemo(() => (a: Anchor) => resolveAnchor(a, ma.store, normCoords), [ma, normCoords])
+
+  const { placed, unplaceable, anchorsUsed } = useMemo(
+    () => (baseGid != null ? placeMarks(ma, baseGid, markGids, resolve) : { placed: [], unplaceable: [], anchorsUsed: [] }),
+    [ma, baseGid, markGids, resolve],
+  )
+
+  // Render items: VF outlines via the isolated HB font, else opentype default master.
+  const upm = font.unitsPerEm || 1000
+  const items = useMemo<RenderItem[]>(() => {
+    if (useVf && outlineFont) outlineFont.setVariations(localCoords)
+    const out: RenderItem[] = []
+    for (const p of placed) {
+      if (useVf && outlineFont) {
+        const d = outlineFont.glyphPath(p.gid)
+        const e = outlineFont.glyphExtents(p.gid)
+        if (!d || !e) continue
+        out.push({ d, x: p.x, y: p.y, x1: e.xBearing, y1: e.yBearing + e.height, x2: e.xBearing + e.width, y2: e.yBearing })
+      } else {
+        const g = font.glyphs.get(p.gid)
+        if (!g) continue
+        let d = ''
+        try {
+          d = g.path.toPathData(2)
+        } catch {
+          d = ''
+        }
+        const bb = g.getBoundingBox()
+        if (!d || !bb) continue
+        out.push({ d, x: p.x, y: p.y, x1: bb.x1, y1: bb.y1, x2: bb.x2, y2: bb.y2 })
+      }
+    }
+    return out
+  }, [useVf, outlineFont, localCoords, placed, font])
 
   const markByGid = useMemo(() => new Map(inv.marks.map((m) => [m.gid, m])), [inv])
   const base = inv.bases.find((b) => b.gid === baseGid)
@@ -105,7 +164,9 @@ export function MarkExplorer({
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">Mark · mkmk explorer</h2>
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              Composed from the font's GPOS anchors (default instance).
+              {useVf
+                ? "Composed from the font's GPOS anchors — follows the current axis position."
+                : "Composed from the font's GPOS anchors (default instance)."}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-3">
@@ -138,7 +199,7 @@ export function MarkExplorer({
         <div className="flex min-h-[36vh] flex-col items-center justify-center gap-3 border-b border-neutral-200 bg-neutral-50 px-4 py-6 dark:border-neutral-800 dark:bg-neutral-950/50">
           {base ? (
             <>
-              <ComposedGlyphs font={font} placed={placed} anchorsUsed={anchorsUsed} showAnchors={showAnchors} height={300} />
+              <ComposedGlyphs items={items} anchorsUsed={anchorsUsed} showAnchors={showAnchors} height={300} upm={upm} />
               <div className="flex flex-col items-center gap-0.5">
                 <div className="font-mono text-[11px] text-neutral-400 dark:text-neutral-600">{cpLine}</div>
                 {nameLine && <div className="max-w-xl text-center text-[11px] text-neutral-500 dark:text-neutral-400">{nameLine}</div>}
@@ -154,6 +215,11 @@ export function MarkExplorer({
             </>
           ) : (
             <div className="py-8 text-sm text-neutral-400 dark:text-neutral-600">Select a base glyph below.</div>
+          )}
+          {axes.length > 0 && (
+            <div className="w-full max-w-3xl">
+              <AxisControls axes={axes} instances={instances} coords={localCoords} onCoords={setLocalCoords} />
+            </div>
           )}
         </div>
 

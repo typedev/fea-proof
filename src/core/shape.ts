@@ -67,6 +67,32 @@ export async function loadShaper(sfnt: ArrayBuffer): Promise<Shaper> {
   }
 }
 
+export interface OutlineFont {
+  setVariations(coords: Record<string, number>): void
+  /** SVG path data for a glyph at the current variations — FONT UNITS, Y-UP. */
+  glyphPath(gid: number): string
+  /** Glyph bounding box at the current variations (y-up; height is negative). */
+  glyphExtents(gid: number): { xBearing: number; yBearing: number; width: number; height: number } | undefined
+}
+
+/**
+ * An ISOLATED HarfBuzz font for variable-glyph OUTLINE extraction — its own
+ * variation state, decoupled from the shared analysis `Shaper` (so setting axes
+ * for a preview can't corrupt background shaping diffs). Default scale == upem,
+ * so paths/extents come out in font units.
+ */
+export async function loadOutlineFont(sfnt: ArrayBuffer): Promise<OutlineFont> {
+  const hb = await getHb()
+  const font = new hb.Font(new hb.Face(new hb.Blob(sfnt), 0))
+  return {
+    setVariations(coords) {
+      font.setVariations(Object.entries(coords).map(([tag, v]) => new hb.Variation(tag, v)))
+    },
+    glyphPath: (gid) => font.glyphToPath(gid),
+    glyphExtents: (gid) => font.glyphExtents(gid),
+  }
+}
+
 /**
  * Character-index ranges [start, end) whose shaping differs between two variants.
  * Glyphs are grouped by cluster (source char); a cluster whose glyph-id sequence

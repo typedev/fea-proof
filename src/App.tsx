@@ -241,7 +241,13 @@ function Loaded({
         <OrphanGlyphs font={loaded.font} gids={orphans} size={size} />
       </div>
       {markExplorer && (
-        <MarkExplorer font={loaded.font} sfnt={loaded.sfnt} onClose={() => setMarkExplorer(null)} />
+        <MarkExplorer
+          font={loaded.font}
+          sfnt={loaded.sfnt}
+          variations={variations}
+          coords={coords}
+          onClose={() => setMarkExplorer(null)}
+        />
       )}
       </FeatureVariationsContext.Provider>
     </VariationSettingsContext.Provider>
