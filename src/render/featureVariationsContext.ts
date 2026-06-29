@@ -16,6 +16,10 @@ export interface FeatureVariationsData {
   avar: AvarSegments
   /** Substitution groups keyed by the substituted feature tag (e.g. "rvrn"). */
   groupsByTag: Map<string, RvrnGroup[]>
+  /** Per-group (by lookup index) user-space coords that make it fire. */
+  applyByLookup: Map<number, Record<string, number>>
+  /** Set the global axis coordinates (so the substitution shows in the proofs). */
+  onApply: (coords: Record<string, number>) => void
 }
 
 export const FeatureVariationsContext = createContext<FeatureVariationsData | null>(null)

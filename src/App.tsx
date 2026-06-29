@@ -18,7 +18,7 @@ import { FeatureList } from './ui/FeatureList'
 import { CombinationExplorer } from './ui/CombinationExplorer'
 import { Controls } from './ui/Controls'
 import { rvrnSubstitutionGroups } from './core/featureVariations'
-import { readAvarSegments } from './core/coords'
+import { readAvarSegments, inConditionCoords } from './core/coords'
 import { FeatureVariationsContext, type FeatureVariationsData } from './render/featureVariationsContext'
 
 type Theme = 'light' | 'dark'
@@ -136,15 +136,27 @@ function Loaded({
     if (!variations) return null
     const groups = rvrnSubstitutionGroups(loaded.font, loaded.sfnt, variations.axes)
     if (groups.length === 0) return null
+    const base = defaultCoords(variations.axes)
     const groupsByTag = new Map<string, typeof groups>()
+    const applyByLookup = new Map<number, Record<string, number>>()
     for (const g of groups) {
       for (const tag of g.featureTags) {
         const list = groupsByTag.get(tag)
         if (list) list.push(g)
         else groupsByTag.set(tag, [g])
       }
+      // Coordinates that make this group fire (first condition set), so the user
+      // can jump there and see the substitution in the live proofs.
+      if (g.conditionSets[0]) applyByLookup.set(g.lookupIndex, inConditionCoords(variations.axes, g.conditionSets[0], base))
     }
-    return { font: loaded.font, axes: variations.axes, avar: readAvarSegments(loaded.font, variations.axes), groupsByTag }
+    return {
+      font: loaded.font,
+      axes: variations.axes,
+      avar: readAvarSegments(loaded.font, variations.axes),
+      groupsByTag,
+      applyByLookup,
+      onApply: setCoords,
+    }
   }, [loaded, variations])
   // Keep the shared HarfBuzz font at the current coordinates so lazily-computed
   // shape diffs (e.g. expanding an affected-glyph grid) stay coordinate-accurate.

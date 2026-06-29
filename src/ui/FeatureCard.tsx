@@ -189,7 +189,15 @@ export function FeatureCard({
       )}
       {fv && hasFvGroups && (
         <div className="mt-3">
-          <FeatureVariationsGroups font={fv.font} axes={fv.axes} avar={fv.avar} groups={fvGroups} size={size} />
+          <FeatureVariationsGroups
+            font={fv.font}
+            axes={fv.axes}
+            avar={fv.avar}
+            groups={fvGroups}
+            size={size}
+            applyByLookup={fv.applyByLookup}
+            onApply={fv.onApply}
+          />
         </div>
       )}
     </div>

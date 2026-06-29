@@ -12,6 +12,14 @@ const fmt = (v: number): string => {
 }
 const condKey = (set: AxisRange[]): string => set.map((c) => `${c.tag}:${c.min}:${c.max}`).join('|')
 
+/** "slnt −15, CRSV 1" — the axes the apply-coords action moves off their default. */
+function applyDescription(coords: Record<string, number>, axisByTag: Map<string, VariationAxis>): string {
+  const parts = Object.entries(coords)
+    .filter(([tag, v]) => v !== axisByTag.get(tag)?.default)
+    .map(([tag, v]) => `${tag} ${fmt(v)}`)
+  return parts.length ? parts.join(', ') : 'the default coordinates'
+}
+
 /**
  * Conditional substitutions from GSUB FeatureVariations (rvrn): which glyphs the
  * font swaps for a variant when the design coordinate enters a range. Rendered
@@ -25,12 +33,16 @@ export function FeatureVariationsGroups({
   avar,
   groups,
   size = 30,
+  applyByLookup,
+  onApply,
 }: {
   font: Font
   axes: VariationAxis[]
   avar: AvarSegments
   groups: RvrnGroup[]
   size?: number
+  applyByLookup: Map<number, Record<string, number>>
+  onApply: (coords: Record<string, number>) => void
 }) {
   const axisByTag = useMemo(() => new Map(axes.map((a) => [a.tag, a])), [axes])
 
@@ -38,11 +50,20 @@ export function FeatureVariationsGroups({
     <div className="space-y-3">
       <p className="text-xs text-neutral-500 dark:text-neutral-400">
         Conditional substitutions — glyphs the font swaps for a variant when the variation
-        coordinate enters a range. Drag the axis sliders into the listed ranges to see them apply in
-        the proofs.
+        coordinate enters a range. Use “apply coordinates” (or drag the axis sliders into a listed
+        range) to see them in the proofs.
       </p>
       {groups.map((g) => (
-        <Group key={g.lookupIndex} font={font} group={g} axisByTag={axisByTag} avar={avar} size={size} />
+        <Group
+          key={g.lookupIndex}
+          font={font}
+          group={g}
+          axisByTag={axisByTag}
+          avar={avar}
+          size={size}
+          apply={applyByLookup.get(g.lookupIndex)}
+          onApply={onApply}
+        />
       ))}
     </div>
   )
@@ -54,12 +75,16 @@ function Group({
   axisByTag,
   avar,
   size,
+  apply,
+  onApply,
 }: {
   font: Font
   group: RvrnGroup
   axisByTag: Map<string, VariationAxis>
   avar: AvarSegments
   size: number
+  apply?: Record<string, number>
+  onApply: (coords: Record<string, number>) => void
 }) {
   const [showAll, setShowAll] = useState(false)
   const shown = showAll ? group.pairs : group.pairs.slice(0, INITIAL)
@@ -97,6 +122,15 @@ function Group({
         <span className="text-neutral-400 dark:text-neutral-600">
           {group.pairs.length} glyph{group.pairs.length === 1 ? '' : 's'}
         </span>
+        {apply && (
+          <button
+            onClick={() => onApply(apply)}
+            title={`Set ${applyDescription(apply, axisByTag)} so this substitution shows in the proofs`}
+            className="ml-auto text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+          >
+            Apply coordinates
+          </button>
+        )}
       </div>
 
       <div className="flex flex-col gap-1">

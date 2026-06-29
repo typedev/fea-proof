@@ -58,3 +58,35 @@ function denormalize(axis: VariationAxis, n: number): number {
 export function toUserCoord(axis: VariationAxis, segments: AvarSegments, normalized: number): number {
   return denormalize(axis, avarInverse(segments[axis.tag], normalized))
 }
+
+/**
+ * A user-space value that lands INSIDE a condition's normalized range. Anchors
+ * are exact regardless of avar (min→−1, default→0, max→+1); prefer the default
+ * when it's in range (least disruptive), else an axis extreme, else the (avar-
+ * unaware, best-effort) midpoint of the range.
+ */
+function inRangeValue(axis: VariationAxis, min: number, max: number): number {
+  if (min <= 0 && 0 <= max) return axis.default
+  if (max >= 1) return axis.max
+  if (min <= -1) return axis.min
+  return denormalize(axis, (min + max) / 2)
+}
+
+/**
+ * User-space coordinates that satisfy every axis range in a condition set, built
+ * on top of a base (typically the default instance). Axes not named by the
+ * condition keep their base value. Used by the rvrn "apply coordinates" action.
+ */
+export function inConditionCoords(
+  axes: VariationAxis[],
+  conditions: { tag: string; min: number; max: number }[],
+  base: Record<string, number>,
+): Record<string, number> {
+  const byTag = new Map(axes.map((a) => [a.tag, a]))
+  const coords = { ...base }
+  for (const c of conditions) {
+    const axis = byTag.get(c.tag)
+    if (axis) coords[c.tag] = inRangeValue(axis, c.min, c.max)
+  }
+  return coords
+}
