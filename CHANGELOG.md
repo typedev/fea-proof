@@ -19,6 +19,10 @@ OpenType feature or UI area they affect.
   script and suppresses the ligature. Each ordinal token is shaped in isolation.
 - The `ordn` fallback template lists only the ordinal forms a font actually builds,
   instead of showing unsupported placeholders.
+- A feature whose glyphs are all produced by another feature (e.g. a stylistic set
+  restyling ligatures) no longer fabricates a misleading cross-feature proof in its
+  card — it now points to the Feature Combinations explorer. This also removes
+  occasional garbled demo words on decorative faces.
 
 ## 2026-06-29
 
