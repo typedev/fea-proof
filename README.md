@@ -47,6 +47,19 @@ machine.
   the font's correct LookupList order). Chips with no effect in the current
   combination are dimmed, revealing dependencies and conflicts (HarfBuzz-checked).
 - **Alternates** (`aalt`, `salt`) — a grid of every glyph's alternate forms.
+- **Variable fonts** — `fvar` axes get sliders and a named-instance picker in the
+  top bar; every proof re-renders live at the chosen point in design space
+  (hidden axes are honored but not shown). The HarfBuzz analysis tracks the same
+  coordinates.
+- **Conditional substitutions** (`rvrn` / GSUB `FeatureVariations`) — the glyphs a
+  variable font swaps for a variant when the design coordinate enters a range,
+  shown as base→variant pairs with the (user-space) axis ranges and an "apply
+  coordinates" button that jumps the axes there so you see it in the proofs.
+- **Mark / mkmk explorer** — a full-screen tool (opened from the `mark`/`mkmk`
+  card) to compose a base glyph with combining marks and see how the font attaches
+  them by anchors, including multi-mark stacking (mkmk). Combinations the font
+  doesn't define are greyed out. Composition is anchor-driven (not browser text),
+  so it shows the real attachment instead of collapsing into precomposed glyphs.
 - **Unreachable glyphs** — glyphs with no Unicode mapping that no feature toggle
   can produce, so they can't be typed or reached at all (useful QA signal).
 - **Feature navigator** — a jump-list in the sticky top bar with a chip per
@@ -99,7 +112,13 @@ copy `deploy.config.example` → `deploy.config` and set your target.
 - **Analysis:** [HarfBuzz](https://github.com/harfbuzz/harfbuzzjs) (wasm, lazy
   loaded) is used as an analysis engine — not a renderer — to diff shaping
   before/after a feature (exact changed glyphs to highlight) and to confirm
-  contextual triggers.
+  contextual triggers. Variable-font coordinates are applied to the shaper too.
+- **Variable & low-level tables:** `fvar`/`avar`/GDEF are read via opentype.js;
+  the parts it doesn't expose — fvar hidden-axis flags, GSUB `FeatureVariations`
+  (`rvrn`), and GPOS mark/mkmk anchors — are parsed directly from the font bytes.
+  The mark explorer positions glyph outlines from those anchors itself (going
+  through the browser's text shaper would normalize base+mark into precomposed
+  glyphs and hide the attachment).
 
 ## Tech
 
@@ -115,8 +134,8 @@ React + Vite + TypeScript + Tailwind v4. No backend.
 
 ## Roadmap
 
-- True cross-feature cascade detection via shaping (the combinations explorer
-  already covers most of this).
+- Variable-font-accurate marks: make the mark/mkmk explorer follow the axes
+  (interpolated outlines + variable anchors), not just the default instance.
 - More scripts (Arabic, Devanagari, Hebrew — the browser already shapes them; the
-  work is sample generation and UI).
+  work is sample generation and UI; the mark explorer is already script-agnostic).
 - Visual design pass.

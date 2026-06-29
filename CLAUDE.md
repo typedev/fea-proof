@@ -47,6 +47,24 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
     to build trigger strings analytically.
   - `inspect.ts` — `findOrphanGlyphs`: glyphs with no cmap that no feature can
     produce (the "Unreachable glyphs" section).
+  - `variations.ts` — variable fonts: `readVariations` (fvar axes + named
+    instances), `defaultCoords`; `findTable(sfnt, tag)` raw sfnt table locator
+    (shared). Recovers the HIDDEN-axis flag via a manual byte parse — opentype.js
+    drops it. `LoadedFont.variations`.
+  - `coords.ts` — normalized↔user-space: `toUserCoord` (avar-inverse via
+    `gdef`/`avar` segment maps, then linear denormalize), `inConditionCoords`
+    (a user-space point inside a rvrn condition, for "apply coordinates"),
+    `readAvarSegments`.
+  - `featureVariations.ts` — manual DataView parse of GSUB `FeatureVariations`
+    (rvrn; opentype.js doesn't expose it): `readFeatureVariations`,
+    `rvrnSubstitutionGroups` (base→variant glyph pairs grouped by alternate lookup).
+  - `marks.ts` — `buildMarkInventory`: base/mark glyph lists from GDEF
+    `glyphClassDef` (class 1 = base, 3 = mark), cmap-joined. Powers the mark explorer.
+  - `markAnchors.ts` — manual GPOS parse of mark (type 4) + mkmk (type 6)
+    attachment (opentype.js returns `{error}` for these): `parseMarkAnchors`,
+    `attachToBase`, `attachToMark`, `placeMarks` (anchor-based glyph positioning).
+  - `unicodeName.ts` — Unicode standard names; lazily imports the bundled
+    `unicodeNames.json` table (CJK derived algorithmically).
   - `types.ts` — shared types.
 - `src/samples/` — sample-text generation:
   - `index.ts` — `prepareSamples(font, features)` → `Map<tag, FeatureSample>`; dispatches
@@ -74,17 +92,31 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
     languages round-robin (not `flat()`) so no single language dominates picks.
   - `wordlists/` — bundled FrequencyWords (MIT), trimmed per language (~5k each).
 - `src/render/` — `featureSettings.ts` (before/after `font-feature-settings`:
-  plain, ligature isolation, and figure isolation `figureBeforeAfter`/
-  `figureFeatures`), `Preview.tsx`, `LoclPreview.tsx` (per-language cells +
-  localized-forms inventory, each form shown with an inline localized demo word),
-  `highlight.tsx` (mark affected chars).
-- `src/ui/` — `DropZone`, `Header`, `Controls` (sticky bar; hosts `FeatureNav`
-  + publishes `--scroll-offset`), `FeatureNav` (jump-list), `FeatureList`,
-  `FeatureCard`, `AffectedGlyphs` (full inventory; each tile shows the pair plus
-  an inline demo word — off for numeric features, gated by `isFigureLikeFeature`),
-  `AltGrid` (alternates),
-  `ContextualExamples`, `CombinationExplorer`, `OrphanGlyphs` (unreachable).
-- `src/App.tsx` — state + layout.
+  plain, ligature isolation, figure isolation `figureBeforeAfter`/`figureFeatures`;
+  plus `toVariationSettings` for `font-variation-settings`), `Preview.tsx`,
+  `LoclPreview.tsx` (per-language cells + localized-forms inventory, each form
+  shown with an inline localized demo word), `highlight.tsx` (mark affected chars).
+  - `variationContext.ts` — React context carrying the current
+    `font-variation-settings` string into EVERY preview (avoids prop-drilling
+    axis coords through the whole tree).
+  - `featureVariationsContext.ts` — context with the rvrn substitution groups
+    (keyed by substituted feature tag) + `applyByLookup` coords + `onApply`, so
+    they render inside the substituted feature's (navigable) card.
+- `src/ui/` — `DropZone`, `Header`, `Controls` (sticky bar; hosts `FeatureNav`,
+  `AxisControls`, publishes `--scroll-offset`), `AxisControls` (variable-font axis
+  sliders + named-instance picker; collapses >4 axes, hides hidden axes),
+  `FeatureNav` (jump-list), `FeatureList`, `FeatureCard`, `AffectedGlyphs` (full
+  inventory; each tile shows the pair plus an inline demo word — off for numeric
+  features, gated by `isFigureLikeFeature`), `AltGrid` (alternates),
+  `FeatureVariationsGroups` (rvrn: base→variant glyph-outline pairs + condition
+  ranges + "apply coordinates", rendered inside the feature card),
+  `ContextualExamples`, `CombinationExplorer`, `OrphanGlyphs` (unreachable),
+  `GlyphOutline` (render a glyph by gid from its outline; `fit` bbox mode for
+  marks/variants — shared by OrphanGlyphs, rvrn groups, mark explorer),
+  `MarkExplorer` (full-screen mark·mkmk explorer overlay), `ComposedGlyphs`
+  (base + marks positioned by GPOS anchors in one SVG).
+- `src/App.tsx` — state + layout (incl. axis `coords`, the variable/rvrn/mark
+  contexts, and the mark-explorer overlay state).
 
 ## Conventions & hard-won gotchas
 
@@ -183,6 +215,44 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
   var(--scroll-offset)` so a jumped-to heading lands just below the bar instead
   of hiding under it. Anchor ids: `featureAnchorId(feature)`,
   `feature-combinations`, `unreachable-glyphs`.
+- **Variable fonts.** `Controls`→`AxisControls` exposes axis sliders + a
+  named-instance picker; the chosen coords (`Record<tag, value>`, user-space)
+  drive `font-variation-settings` on EVERY preview via `VariationSettingsContext`,
+  and `shape.ts setVariations` keeps the HarfBuzz analysis at the same point.
+  opentype.js does NOT expose the fvar axis `flags`, so the HIDDEN flag is read by
+  a manual byte parse (`variations.ts`); hidden axes get no slider but stay in the
+  coord map. Normalization ALWAYS maps axis min→−1, default→0, max→+1 regardless
+  of avar (only interior points remap) — used by `inConditionCoords`'s anchor
+  rule. Condition ranges are shown in user-space via `toUserCoord` (avar-inverse).
+- **rvrn / GSUB FeatureVariations.** opentype.js doesn't parse it → manual
+  DataView parse (`featureVariations.ts`, mirrors the `findTable` byte-parse
+  pattern). Conditions are NORMALIZED axis ranges (F2Dot14). It substitutes a
+  feature's lookups by coordinate (NOT a toggle), and can be active AT THE DEFAULT
+  instance — so don't diff default-vs-coordinate; show the analytical base→variant
+  pairs (`rvrnSubstitutionGroups`) as glyph outlines instead. Rendered inside the
+  substituted feature's card (usually `rvrn`) via `FeatureVariationsContext`; each
+  group has an "apply coordinates" button (`inConditionCoords` → set global coords).
+- **mark / mkmk explorer.** mark (GPOS type 4 MarkToBase) / mkmk (type 6
+  MarkToMark) POSITION a mark glyph on a base/another-mark by matching per-class
+  anchors — no precomposed glyph needed. The base/mark glyph lists come from GDEF
+  `glyphClassDef` (opentype DOES parse that), but the ANCHORS do NOT (GPOS mark
+  subtables come back `{error}`) → manual byte parse (`markAnchors.ts`; GPOS
+  Extension is type 9). **Do NOT compose via browser text:** the browser/HarfBuzz
+  normalizes "a"+U+0304 into the precomposed `amacron` (and the acute then lands
+  offset), hiding real attachment — so we position glyph OUTLINES ourselves
+  (`placeMarks` → `ComposedGlyphs`). Math (verified vs HB): mark-to-base
+  `markPos = baseAnchor − markAnchor`; mkmk `mark2Pos + mark2Anchor − mark1Anchor`.
+  Marks that can't attach to the selected base / top mark are greyed out. Renders
+  at the DEFAULT instance (opentype `getPath` is default-master only; fmt3 anchor
+  variation deltas ignored) — VF-accurate marks (HB `glyphToPath` + GDEF
+  ItemVariationStore deltas) is the next step.
+- **Shared glyph-inventory style + size.** New glyph-grid UIs reuse the common
+  tile look (container `bg-neutral-50`, tile `bg-white`, muted base → arrow →
+  variant) and the shared size cap `Math.min(size, 30)` — don't invent a new
+  look/sizing (see `AffectedGlyphs`, rvrn groups, `OrphanGlyphs`, mark columns).
+  `GlyphOutline`'s `fit` mode renders a glyph at em-proportion from its bbox
+  (marks have ~0 advance and would otherwise clip). Scrollbars are theme-colored
+  app-wide in `src/index.css`.
 
 ## Deploy
 
@@ -205,8 +275,10 @@ though curl gets 200. Real static hosts (GitHub Pages, etc.) don't do this.
 
 Live in `test_fonts/` and are **git-ignored** (licensing/cleanliness). The dev
 server serves them at `/test_fonts/<file>`. OFL references: Source Code Pro, EB
-Garamond (see `test_fonts/README.md`). Don't commit fonts or reference
-non-public/NDA fonts in code, docs, or commit messages.
+Garamond (also a `wght` variable font), and **Recursive** (5-axis VF with GSUB
+`FeatureVariations`/`rvrn` and mkmk — the test case for the variable + mark work;
+see `test_fonts/README.md`). Don't commit fonts or reference non-public/NDA fonts
+in code, docs, or commit messages.
 
 ## Verifying in the browser (Playwright MCP)
 
@@ -219,6 +291,15 @@ up source edits, or the probe runs stale code.
 
 ## Deferred (future)
 
+- **VF-accurate marks (next up):** the mark explorer renders at the default
+  instance. Make it follow the axes — VF outlines via HarfBuzz
+  `font.setVariations(coords)` + `glyphToPath(gid)` (opentype.js can't
+  interpolate), and variable anchors via the GDEF ItemVariationStore (parse +
+  apply deltas to anchor fmt3 at the current normalized coords). Self-contained,
+  medium effort. Re-plumb current coords into `MarkExplorer`.
+- rvrn follow-ups: general conditional-features / axis-space explorer; ConditionTable
+  formats 2/3; avar2 / dozens-of-axes register UI. Mark explorer: >2 mixed
+  above/below stacks (host heuristic), fmt2 anchorPoint, non-cmapped marks, RTL.
 - More scripts (Arabic/Indic/Hebrew); visual design pass.
 - Cyrillic variants of the Turkic locl langs: `KAZ` now has a Cyrillic entry
   (`kk`, with a real wordlist — Kazakh is primarily Cyrillic); `AZE`/`TAT`/`CRT`
@@ -229,4 +310,8 @@ up source edits, or the probe runs stale code.
 Done already: alternates (`ui/AltGrid.tsx`, `font-feature-settings: "<tag>" N`);
 full per-language `locl` inventory; sticky feature navigator; portable
 relative-base deploy; figure-feature isolation + honest cascade labels (swept all
-`test_fonts/` for "default"-cell leaks — clean except intended `dlig` cascades).
+`test_fonts/` for "default"-cell leaks — clean except intended `dlig` cascades);
+**variable fonts** (axis sliders + named instances + `font-variation-settings`
+everywhere); **rvrn / FeatureVariations** (conditional substitutions in the
+feature card, with "apply coordinates"); **mark·mkmk explorer** (anchor-based
+composition + validity gating).

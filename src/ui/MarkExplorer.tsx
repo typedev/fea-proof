@@ -33,7 +33,7 @@ export function MarkExplorer({
   const [baseGid, setBaseGid] = useState<number | null>(inv.bases[0]?.gid ?? null)
   const [markGids, setMarkGids] = useState<number[]>([])
   const [tileSize, setTileSize] = useState(44)
-  const [showAnchors, setShowAnchors] = useState(false)
+  const [showAnchors, setShowAnchors] = useState(true)
   const [names, setNames] = useState<Names>(null)
 
   useEffect(() => {
