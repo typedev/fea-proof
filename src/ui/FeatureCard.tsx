@@ -134,6 +134,7 @@ export function FeatureCard({
                 defaultOn={feature.defaultOn}
                 size={size}
                 highlightRanges={sample.highlightRanges}
+                isolate={sample.isolate}
                 settings={sample.kind === 'ligature' ? ligatureBeforeAfter(feature.tag) : sample.settings}
                 labels={
                   sample.kind === 'ligature'

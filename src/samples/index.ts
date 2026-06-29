@@ -49,6 +49,8 @@ export type FeatureSample =
       note?: string
       /** Cell labels override — cascades name the active producer context. */
       labels?: { before: string; after: string }
+      /** Render each token as an isolated shaping run (mixed-script ordinals). */
+      isolate?: boolean
     }
   | { tag: string; kind: 'locl'; languages: LoclLanguageSample[] }
   | { tag: string; kind: 'alternates'; alternates: { char: string; indices: number[] }[] }
@@ -121,6 +123,34 @@ function shapingHighlight(
     if (nonSpace === 0 || changed / nonSpace > 0.6) return undefined
   }
   return ranges
+}
+
+/**
+ * Highlight ranges for a sample whose tokens are rendered as ISOLATED shaping runs
+ * (highlight.tsx `isolate`). Each whitespace token is diffed on its own, so the
+ * marks match what's drawn — diffing the whole mixed-script string as one run
+ * would mark different clusters than the isolated tokens actually produce.
+ */
+function isolatedHighlight(
+  shaper: Shaper | undefined,
+  text: string,
+  before: ShapeVariant,
+  after: ShapeVariant,
+): HighlightRanges | undefined {
+  if (!shaper) return undefined
+  const ranges: HighlightRanges = []
+  const tokenRe = /\S+/g
+  let m: RegExpExecArray | null
+  while ((m = tokenRe.exec(text))) {
+    let r: HighlightRanges
+    try {
+      r = changedRanges(shaper, m[0], before, after)
+    } catch {
+      continue
+    }
+    for (const [s, e] of r) ranges.push([m.index + s, m.index + e])
+  }
+  return ranges.length ? ranges : undefined
 }
 
 interface Pending {
@@ -468,8 +498,12 @@ export async function prepareSamples(
           text,
           usedCoverage: false,
           affected: sequences,
-          highlightRanges: shapingHighlight(shaper, text, { features: before }, { features: after }, undefined, false),
+          // Tokens are isolated when rendered (mixed Latin/Cyrillic ordinals would
+          // otherwise not ligate — the script-neutral digit inherits a neighbour's
+          // script), so diff each token on its own to match what's drawn.
+          highlightRanges: isolatedHighlight(shaper, text, { features: before }, { features: after }),
           settings: figureBeforeAfter('ordn'),
+          isolate: true,
         })
         noteScripts(sequences.flatMap((s) => [...s]))
         continue
@@ -485,8 +519,19 @@ export async function prepareSamples(
     // honestly identical, flagged inert for a note. (ordn with an enumerable
     // digit-ligature set is handled just above and never reaches here.)
     if (FIGURE_TEMPLATES[feature.tag]) {
-      const template = FIGURE_TEMPLATES[feature.tag]
+      let template = FIGURE_TEMPLATES[feature.tag]
       const { before, after } = figureFeatures(feature.tag)
+      // ordn's template is a list of INDEPENDENT ordinal forms (1a 3e 5th No.…).
+      // A font that doesn't build some of them would show them unchanged, which
+      // misleads ("are 3e/5th supported here?"). Keep only the forms this font
+      // actually transforms (verified per token by shaping); if none, fall back to
+      // the full template so the inert note below can explain it.
+      if (feature.tag === 'ordn' && shaper) {
+        const shapeKey = (tok: string, feats: string[]) =>
+          shaper.shape(tok, { features: feats }).map((g) => g.g).join()
+        const kept = template.split(/\s+/).filter((tok) => shapeKey(tok, before) !== shapeKey(tok, after))
+        if (kept.length > 0) template = kept.join('  ')
+      }
       const inert =
         !!shaper &&
         shaper.shape(template, { features: before }).map((g) => g.g).join() ===

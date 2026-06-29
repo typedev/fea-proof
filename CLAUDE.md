@@ -267,6 +267,15 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
   (marks have ~0 advance and would otherwise clip). Scrollbars are theme-colored
   app-wide in `src/index.css`.
 
+## Changelog
+
+`CHANGELOG.md` (public) records notable changes. Update it in the same commit as a
+user-visible change: add a bullet under `## [Unreleased]` (`Added` / `Changed` /
+`Fixed`). On deploy, rename `[Unreleased]` to the date. **Never name a test font**
+in it — describe changes by the OpenType feature or UI area (same rule as commit
+messages and code/docs; OFL faces named in `test_fonts/README.md` are the only
+exception, and even then prefer the feature/area).
+
 ## Deploy
 
 The build uses a **relative base** (`base: process.env.VITE_BASE || './'` in
