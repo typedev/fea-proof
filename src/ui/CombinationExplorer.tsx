@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties } from 'react'
 import type { CombinationGroup, FeatureToggle } from '../core/combinations'
 import type { Shaper } from '../core/shape'
 import { effectiveFeatures } from '../core/interactions'
+import { useVariationSettings } from '../render/variationContext'
 
 function buildSettings(features: FeatureToggle[], active: Set<string>): string {
   const parts: string[] = []
@@ -49,6 +50,7 @@ function CombinationCard({
     fontSize: size,
     lineHeight: 1.3,
     fontFeatureSettings: buildSettings(group.features, active),
+    fontVariationSettings: useVariationSettings(),
   }
 
   const chipClass = (tag: string): string => {

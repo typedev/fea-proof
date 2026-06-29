@@ -1,4 +1,5 @@
 import type { Font } from 'opentype.js'
+import type { FontVariations } from './variations'
 
 /** A font loaded into the app: parsed for introspection + registered for CSS rendering. */
 export interface LoadedFont {
@@ -16,6 +17,8 @@ export interface LoadedFont {
   hasGsub: boolean
   /** Decompressed sfnt bytes (for HarfBuzz shaping). */
   sfnt: ArrayBuffer
+  /** fvar axes + named instances, or null if not a variable font. */
+  variations: FontVariations | null
 }
 
 /** One (script, language) context in which a feature is registered. */

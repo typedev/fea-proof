@@ -9,11 +9,17 @@ import { OrphanGlyphs } from './ui/OrphanGlyphs'
 import { loadShaper, type Shaper } from './core/shape'
 import { prepareSamples, type FeatureSample } from './samples'
 import type { LoadedFont } from './core/types'
+import { defaultCoords } from './core/variations'
+import { toVariationSettings } from './render/featureSettings'
+import { VariationSettingsContext } from './render/variationContext'
 import { DropZone } from './ui/DropZone'
 import { Header } from './ui/Header'
 import { FeatureList } from './ui/FeatureList'
 import { CombinationExplorer } from './ui/CombinationExplorer'
 import { Controls } from './ui/Controls'
+import { rvrnSubstitutionGroups } from './core/featureVariations'
+import { readAvarSegments } from './core/coords'
+import { FeatureVariationsContext, type FeatureVariationsData } from './render/featureVariationsContext'
 
 type Theme = 'light' | 'dark'
 
@@ -114,6 +120,38 @@ function Loaded({
   const [shaper, setShaper] = useState<Shaper | undefined>(undefined)
   const [size, setSize] = useState(30)
 
+  const variations = loaded.variations
+  const [coords, setCoords] = useState<Record<string, number>>(() =>
+    variations ? defaultCoords(variations.axes) : {},
+  )
+  // Reset to the default instance whenever a new font loads.
+  useEffect(() => {
+    setCoords(variations ? defaultCoords(variations.axes) : {})
+  }, [variations])
+  const varSettings = useMemo(() => toVariationSettings(coords), [coords])
+
+  // GSUB FeatureVariations (rvrn): grouped substitutions, keyed by the feature
+  // tag they substitute, so each renders inside that feature's (navigable) card.
+  const featureVariations = useMemo<FeatureVariationsData | null>(() => {
+    if (!variations) return null
+    const groups = rvrnSubstitutionGroups(loaded.font, loaded.sfnt, variations.axes)
+    if (groups.length === 0) return null
+    const groupsByTag = new Map<string, typeof groups>()
+    for (const g of groups) {
+      for (const tag of g.featureTags) {
+        const list = groupsByTag.get(tag)
+        if (list) list.push(g)
+        else groupsByTag.set(tag, [g])
+      }
+    }
+    return { font: loaded.font, axes: variations.axes, avar: readAvarSegments(loaded.font, variations.axes), groupsByTag }
+  }, [loaded, variations])
+  // Keep the shared HarfBuzz font at the current coordinates so lazily-computed
+  // shape diffs (e.g. expanding an affected-glyph grid) stay coordinate-accurate.
+  useEffect(() => {
+    shaper?.setVariations(coords)
+  }, [shaper, coords])
+
   useEffect(() => {
     let cancelled = false
     setSamples(new Map())
@@ -140,32 +178,40 @@ function Loaded({
   }, [loaded, features])
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start gap-4">
-        <div className="min-w-0 flex-1">
-          <Header loaded={loaded} />
+    <VariationSettingsContext.Provider value={varSettings}>
+      <FeatureVariationsContext.Provider value={featureVariations}>
+      <div className="space-y-6">
+        <div className="flex items-start gap-4">
+          <div className="min-w-0 flex-1">
+            <Header loaded={loaded} />
+          </div>
+          <div className="w-56 shrink-0">
+            <DropZone onFile={onFile} busy={busy} compact />
+          </div>
         </div>
-        <div className="w-56 shrink-0">
-          <DropZone onFile={onFile} busy={busy} compact />
-        </div>
+        <Controls
+          size={size}
+          onSize={setSize}
+          theme={theme}
+          onToggleTheme={onToggleTheme}
+          features={features}
+          hasCombinations={combinations.length > 0}
+          hasOrphans={orphans.length > 0}
+          axes={variations?.axes ?? []}
+          instances={variations?.instances ?? []}
+          coords={coords}
+          onCoords={setCoords}
+        />
+        <FeatureList features={features} samples={samples} cssFamily={loaded.cssFamily} size={size} shaper={shaper} />
+        <CombinationExplorer
+          groups={combinations}
+          cssFamily={loaded.cssFamily}
+          size={Math.max(size, 36)}
+          shaper={shaper}
+        />
+        <OrphanGlyphs font={loaded.font} gids={orphans} size={size} />
       </div>
-      <Controls
-        size={size}
-        onSize={setSize}
-        theme={theme}
-        onToggleTheme={onToggleTheme}
-        features={features}
-        hasCombinations={combinations.length > 0}
-        hasOrphans={orphans.length > 0}
-      />
-      <FeatureList features={features} samples={samples} cssFamily={loaded.cssFamily} size={size} shaper={shaper} />
-      <CombinationExplorer
-        groups={combinations}
-        cssFamily={loaded.cssFamily}
-        size={Math.max(size, 36)}
-        shaper={shaper}
-      />
-      <OrphanGlyphs font={loaded.font} gids={orphans} size={size} />
-    </div>
+      </FeatureVariationsContext.Provider>
+    </VariationSettingsContext.Provider>
   )
 }

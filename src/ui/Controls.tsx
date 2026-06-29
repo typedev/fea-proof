@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import type { FeatureInfo } from '../core/types'
+import type { NamedInstance, VariationAxis } from '../core/variations'
 import { FeatureNav } from './FeatureNav'
+import { AxisControls } from './AxisControls'
 
 export function Controls({
   size,
@@ -10,6 +12,10 @@ export function Controls({
   features,
   hasCombinations,
   hasOrphans,
+  axes,
+  instances,
+  coords,
+  onCoords,
 }: {
   size: number
   onSize: (v: number) => void
@@ -18,6 +24,10 @@ export function Controls({
   features: FeatureInfo[]
   hasCombinations: boolean
   hasOrphans: boolean
+  axes: VariationAxis[]
+  instances: NamedInstance[]
+  coords: Record<string, number>
+  onCoords: (c: Record<string, number>) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -64,6 +74,9 @@ export function Controls({
           {theme === 'dark' ? '☀ Light' : '☾ Dark'}
         </button>
       </div>
+      {axes.length > 0 && (
+        <AxisControls axes={axes} instances={instances} coords={coords} onCoords={onCoords} />
+      )}
       <FeatureNav features={features} hasCombinations={hasCombinations} hasOrphans={hasOrphans} />
     </div>
   )

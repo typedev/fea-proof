@@ -7,6 +7,8 @@ import { LoclPreview } from '../render/LoclPreview'
 import { AffectedGlyphs } from './AffectedGlyphs'
 import { ContextualExamples } from './ContextualExamples'
 import { AltGrid } from './AltGrid'
+import { FeatureVariationsGroups } from './FeatureVariationsGroups'
+import { useFeatureVariations } from '../render/featureVariationsContext'
 import { ligatureBeforeAfter, isFigureLikeFeature, isCaseFeature } from '../render/featureSettings'
 
 // Above this many affected glyphs the word sample can't show them all, so offer
@@ -63,6 +65,9 @@ export function FeatureCard({
 }) {
   const kinds = feature.gsubLookupTypes.map((t) => LOOKUP_KIND[t] ?? `type ${t}`)
   const [showAll, setShowAll] = useState(false)
+  const fv = useFeatureVariations()
+  const fvGroups = fv?.groupsByTag.get(feature.tag)
+  const hasFvGroups = !!fvGroups && fvGroups.length > 0
 
   return (
     <div
@@ -106,9 +111,8 @@ export function FeatureCard({
         </div>
       </div>
 
-      {!sample ? (
-        <div className="mt-3 text-xs text-neutral-400 dark:text-neutral-600">{noPreviewReason(feature)}</div>
-      ) : sample.kind === 'locl' ? (
+      {sample ? (
+        sample.kind === 'locl' ? (
         <div className="mt-3">
           <LoclPreview cssFamily={cssFamily} languages={sample.languages} size={size} shaper={shaper} />
         </div>
@@ -178,6 +182,14 @@ export function FeatureCard({
               size={size}
             />
           )}
+        </div>
+        )
+      ) : hasFvGroups ? null : (
+        <div className="mt-3 text-xs text-neutral-400 dark:text-neutral-600">{noPreviewReason(feature)}</div>
+      )}
+      {fv && hasFvGroups && (
+        <div className="mt-3">
+          <FeatureVariationsGroups font={fv.font} axes={fv.axes} avar={fv.avar} groups={fvGroups} size={size} />
         </div>
       )}
     </div>

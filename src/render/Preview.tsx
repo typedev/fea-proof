@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import { beforeAfterSettings } from './featureSettings'
 import { highlightRanges } from './highlight'
+import { useVariationSettings } from './variationContext'
 
 interface PreviewProps {
   cssFamily: string
@@ -20,7 +21,13 @@ interface PreviewProps {
 
 export function Preview({ cssFamily, text, tag, defaultOn, size = 30, lang, labels, highlightRanges: ranges, settings }: PreviewProps) {
   const { before, after } = settings ?? beforeAfterSettings(tag, defaultOn)
-  const base: CSSProperties = { fontFamily: `"${cssFamily}", system-ui`, fontSize: size, lineHeight: 1.35 }
+  const fontVariationSettings = useVariationSettings()
+  const base: CSSProperties = {
+    fontFamily: `"${cssFamily}", system-ui`,
+    fontSize: size,
+    lineHeight: 1.35,
+    fontVariationSettings,
+  }
   const defaultLabels = defaultOn
     ? { before: 'feature off', after: 'default (on)' }
     : { before: 'default', after: 'feature on' }

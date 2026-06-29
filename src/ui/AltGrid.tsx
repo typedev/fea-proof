@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from 'react'
+import { useVariationSettings } from '../render/variationContext'
 
 const INITIAL = 40
 // Up to this many alternates renders as a compact inline tile; more takes a full
@@ -20,10 +21,12 @@ export function AltGrid({
   const [showAll, setShowAll] = useState(false)
   const shown = showAll ? alternates : alternates.slice(0, INITIAL)
   const family = `"${cssFamily}", system-ui`
+  const fontVariationSettings = useVariationSettings()
   const glyph = (k: number): CSSProperties => ({
     fontFamily: family,
     fontSize: Math.min(size, 32),
     fontFeatureSettings: `"${tag}" ${k}`,
+    fontVariationSettings,
   })
 
   const cell = 'inline-flex min-w-[1.5em] items-center justify-center'

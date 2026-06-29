@@ -3,6 +3,7 @@ import { beforeAfterSettings, ligatureBeforeAfter, positionalRole } from '../ren
 import { classifyScript } from '../samples/pick'
 import { inlineSamples, type InlineSample } from '../samples/spotlight'
 import { highlightRanges } from '../render/highlight'
+import { useVariationSettings } from '../render/variationContext'
 import type { Shaper } from '../core/shape'
 
 const SCRIPT_LABELS: Record<string, string> = {
@@ -62,8 +63,9 @@ export function AffectedGlyphs({
   }
   const orderedGroups = SCRIPT_ORDER.filter((k) => groups.has(k))
 
-  const offStyle: CSSProperties = { fontFamily: family, fontFeatureSettings: before, fontSize: glyphSize }
-  const onStyle: CSSProperties = { fontFamily: family, fontFeatureSettings: after, fontSize: glyphSize }
+  const fontVariationSettings = useVariationSettings()
+  const offStyle: CSSProperties = { fontFamily: family, fontFeatureSettings: before, fontSize: glyphSize, fontVariationSettings }
+  const onStyle: CSSProperties = { fontFamily: family, fontFeatureSettings: after, fontSize: glyphSize, fontVariationSettings }
 
   // Lazily pick a demo word per affected item once the grid is shown.
   const [words, setWords] = useState<Map<string, InlineSample | null> | null>(null)

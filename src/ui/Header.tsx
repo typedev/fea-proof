@@ -1,4 +1,5 @@
 import type { LoadedFont } from '../core/types'
+import { useVariationSettings } from '../render/variationContext'
 
 const SCRIPT_LABELS: Record<string, string> = {
   latn: 'Latin',
@@ -11,12 +12,13 @@ const SCRIPT_LABELS: Record<string, string> = {
 }
 
 export function Header({ loaded }: { loaded: LoadedFont }) {
+  const fontVariationSettings = useVariationSettings()
   return (
     <div className="rounded-2xl border border-neutral-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-900/40">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1
           className="text-3xl font-semibold"
-          style={{ fontFamily: `"${loaded.cssFamily}", system-ui` }}
+          style={{ fontFamily: `"${loaded.cssFamily}", system-ui`, fontVariationSettings }}
         >
           {loaded.familyName}
         </h1>

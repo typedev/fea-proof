@@ -101,3 +101,13 @@ export function ligatureFeatures(tag: string): { before: string[]; after: string
     after: group.map((t) => `${t}=${t === tag ? 1 : 0}`),
   }
 }
+
+/**
+ * CSS `font-variation-settings` from a coordinate map. Includes ALL axes (hidden
+ * ones too — they have no slider but must still render at their held value).
+ * Empty map → 'normal'.
+ */
+export function toVariationSettings(coords: Record<string, number>): string {
+  const parts = Object.entries(coords).map(([tag, v]) => `"${tag}" ${v}`)
+  return parts.length ? parts.join(', ') : 'normal'
+}

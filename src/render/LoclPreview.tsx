@@ -3,6 +3,7 @@ import type { LoclLanguageSample } from '../samples'
 import type { Shaper } from '../core/shape'
 import { inlineSamples, type InlineSample } from '../samples/spotlight'
 import { highlightRanges } from './highlight'
+import { useVariationSettings } from './variationContext'
 import { codepoints } from '../ui/AffectedGlyphs'
 
 // Above this many localized forms, collapse the inventory behind a toggle.
@@ -19,7 +20,13 @@ export function LoclPreview({
   size?: number
   shaper?: Shaper
 }) {
-  const base: CSSProperties = { fontFamily: `"${cssFamily}", system-ui`, fontSize: size, lineHeight: 1.4 }
+  const fontVariationSettings = useVariationSettings()
+  const base: CSSProperties = {
+    fontFamily: `"${cssFamily}", system-ui`,
+    fontSize: size,
+    lineHeight: 1.4,
+    fontVariationSettings,
+  }
 
   return (
     <div className="space-y-2">

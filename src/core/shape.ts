@@ -26,6 +26,12 @@ export interface ShapedGlyph {
 
 export interface Shaper {
   shape(text: string, variant?: ShapeVariant, script?: string): ShapedGlyph[]
+  /**
+   * Apply variation coordinates to the shared font. Pass the COMPLETE coord set
+   * (every axis, including hidden ones) — HarfBuzz's setVariations resets any
+   * omitted axis back to its default.
+   */
+  setVariations(coords: Record<string, number>): void
 }
 
 /** Whether HarfBuzz is available (wasm loaded). Used to gracefully degrade. */
@@ -35,7 +41,15 @@ export async function loadShaper(sfnt: ArrayBuffer): Promise<Shaper> {
   const face = new hb.Face(blob, 0)
   const font = new hb.Font(face)
 
+  // Variation state lives on this single shared hb.Font. That is safe because
+  // shaping is fully synchronous and there is one global coordinate set: every
+  // before/after diff is taken at the same current coords, which is exactly what
+  // we want. setVariations is the sole writer (called from one React effect).
+
   return {
+    setVariations(coords) {
+      font.setVariations(Object.entries(coords).map(([tag, v]) => new hb.Variation(tag, v)))
+    },
     shape(text, variant = {}, script) {
       const buffer = new hb.Buffer()
       buffer.addText(text)
