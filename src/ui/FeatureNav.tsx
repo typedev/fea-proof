@@ -13,10 +13,13 @@ export function FeatureNav({
   features,
   hasCombinations,
   hasOrphans,
+  railMode = false,
 }: {
   features: FeatureInfo[]
   hasCombinations: boolean
   hasOrphans: boolean
+  /** In the side rail the list may grow tall; otherwise it's capped + scrolls. */
+  railMode?: boolean
 }) {
   if (features.length === 0) return null
 
@@ -25,7 +28,9 @@ export function FeatureNav({
       <span className="mt-1 shrink-0 text-[11px] uppercase tracking-wide text-neutral-400 dark:text-neutral-600">
         Jump to
       </span>
-      <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
+      <div
+        className={`flex flex-wrap gap-1.5 overflow-y-auto ${railMode ? 'max-h-[60vh]' : 'max-h-28'}`}
+      >
         {features.map((f) => (
           <button
             key={featureAnchorId(f)}

@@ -56,7 +56,7 @@ export function AxisControls({
           </span>
         )}
         {instances.length > 0 && (
-          <label className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
+          <label className="flex min-w-0 items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
             Instance
             <select
               value={activeInstance?.name ?? CUSTOM}
@@ -64,7 +64,7 @@ export function AxisControls({
                 const inst = instances.find((i) => i.name === e.target.value)
                 if (inst) onCoords({ ...coords, ...inst.coords })
               }}
-              className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-sm text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
+              className="min-w-0 max-w-full truncate rounded-md border border-neutral-200 bg-white px-2 py-1 text-sm text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
             >
               {!activeInstance && <option value={CUSTOM}>Custom</option>}
               {instances.map((inst) => (

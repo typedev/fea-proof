@@ -21,6 +21,7 @@ import { rvrnSubstitutionGroups } from './core/featureVariations'
 import { readAvarSegments, inConditionCoords } from './core/coords'
 import { buildMarkInventory, hasMarkInventory } from './core/marks'
 import { MarkExplorer } from './ui/MarkExplorer'
+import { useMediaQuery } from './ui/useMediaQuery'
 import type { FeatureInfo } from './core/types'
 import { FeatureVariationsContext, type FeatureVariationsData } from './render/featureVariationsContext'
 
@@ -52,9 +53,14 @@ export function App() {
 
   const toggleTheme = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), [])
 
+  // On viewports short by height (with room to spare horizontally) the feature
+  // navigator moves from a sticky top bar into a right-hand side rail, reclaiming
+  // vertical space for the proofs. The min-width gate avoids overlapping content.
+  const railMode = useMediaQuery('(max-height: 820px) and (min-width: 1200px)')
+
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
-      <div className="mx-auto max-w-5xl px-6 py-10">
+      <div className={`mx-auto px-6 py-10 ${railMode ? 'max-w-7xl' : 'max-w-5xl'}`}>
         <header className="mb-8 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-sm font-semibold uppercase tracking-widest text-indigo-500 dark:text-indigo-400">
@@ -93,6 +99,7 @@ export function App() {
             busy={busy}
             theme={theme}
             onToggleTheme={toggleTheme}
+            railMode={railMode}
           />
         )}
       </div>
@@ -106,12 +113,14 @@ function Loaded({
   busy,
   theme,
   onToggleTheme,
+  railMode,
 }: {
   loaded: LoadedFont
   onFile: (file: File) => void
   busy: boolean
   theme: Theme
   onToggleTheme: () => void
+  railMode: boolean
 }) {
   const features = useMemo(() => analyzeFeatures(loaded.font), [loaded])
   const orphans = useMemo(
@@ -199,47 +208,67 @@ function Loaded({
     }
   }, [loaded, features])
 
+  const controls = (
+    <Controls
+      size={size}
+      onSize={setSize}
+      theme={theme}
+      onToggleTheme={onToggleTheme}
+      features={features}
+      hasCombinations={combinations.length > 0}
+      hasOrphans={orphans.length > 0}
+      axes={variations?.axes ?? []}
+      instances={variations?.instances ?? []}
+      coords={coords}
+      onCoords={setCoords}
+      railMode={railMode}
+    />
+  )
+
+  // Content column. In rail mode the nav lives in a side <aside>, so it's omitted
+  // here; otherwise it stays inline as the sticky top bar.
+  const column = (
+    <div className="min-w-0 flex-1 space-y-6">
+      <div className="flex items-start gap-4">
+        <div className="min-w-0 flex-1">
+          <Header loaded={loaded} />
+        </div>
+        <div className="w-56 shrink-0">
+          <DropZone onFile={onFile} busy={busy} compact />
+        </div>
+      </div>
+      {!railMode && controls}
+      <FeatureList
+        features={features}
+        samples={samples}
+        cssFamily={loaded.cssFamily}
+        size={size}
+        shaper={shaper}
+        onOpenMarkExplorer={hasMarkInventory(markInventory) ? setMarkExplorer : undefined}
+      />
+      <CombinationExplorer
+        groups={combinations}
+        cssFamily={loaded.cssFamily}
+        size={Math.max(size, 36)}
+        shaper={shaper}
+      />
+      <OrphanGlyphs font={loaded.font} gids={orphans} size={size} />
+    </div>
+  )
+
   return (
     <VariationSettingsContext.Provider value={varSettings}>
       <FeatureVariationsContext.Provider value={featureVariations}>
-      <div className="space-y-6">
-        <div className="flex items-start gap-4">
-          <div className="min-w-0 flex-1">
-            <Header loaded={loaded} />
-          </div>
-          <div className="w-56 shrink-0">
-            <DropZone onFile={onFile} busy={busy} compact />
-          </div>
+      {railMode ? (
+        <div className="flex items-start gap-6">
+          {column}
+          <aside className="sticky top-4 max-h-[calc(100vh-2rem)] w-72 shrink-0 self-start overflow-y-auto">
+            {controls}
+          </aside>
         </div>
-        <Controls
-          size={size}
-          onSize={setSize}
-          theme={theme}
-          onToggleTheme={onToggleTheme}
-          features={features}
-          hasCombinations={combinations.length > 0}
-          hasOrphans={orphans.length > 0}
-          axes={variations?.axes ?? []}
-          instances={variations?.instances ?? []}
-          coords={coords}
-          onCoords={setCoords}
-        />
-        <FeatureList
-          features={features}
-          samples={samples}
-          cssFamily={loaded.cssFamily}
-          size={size}
-          shaper={shaper}
-          onOpenMarkExplorer={hasMarkInventory(markInventory) ? setMarkExplorer : undefined}
-        />
-        <CombinationExplorer
-          groups={combinations}
-          cssFamily={loaded.cssFamily}
-          size={Math.max(size, 36)}
-          shaper={shaper}
-        />
-        <OrphanGlyphs font={loaded.font} gids={orphans} size={size} />
-      </div>
+      ) : (
+        column
+      )}
       {markExplorer && (
         <MarkExplorer
           font={loaded.font}
