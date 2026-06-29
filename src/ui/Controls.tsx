@@ -67,6 +67,13 @@ export function Controls({
         </label>
         <div className="flex-1" />
         <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 dark:border-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-800"
+          title="Scroll to top"
+        >
+          ↑ Top
+        </button>
+        <button
           onClick={onToggleTheme}
           className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 dark:border-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-800"
           title="Toggle light / dark theme"

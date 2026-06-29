@@ -16,18 +16,20 @@ export interface RenderItem {
  * Items are y-up font units (as produced by HarfBuzz `glyphToPath` or opentype's
  * raw `glyph.path`); we flip Y here (`scale(1 −1)`) and frame a single viewBox so
  * a small mark stays small and the stack is centered. Optionally overlays anchors.
+ *
+ * The SVG FILLS its parent and preserves aspect ratio (`xMidYMid meet`), so the
+ * stack always fits the available box — the caller sizes the box, not the glyph
+ * (avoids overflow on short viewports). Give the parent a definite height.
  */
 export function ComposedGlyphs({
   items,
   anchorsUsed,
   showAnchors = false,
-  height,
   upm,
 }: {
   items: RenderItem[]
   anchorsUsed?: Point[]
   showAnchors?: boolean
-  height: number
   upm: number
 }) {
   const valid = items.filter((it) => it.d && !it.d.includes('NaN') && it.x2 - it.x1 >= 0 && it.y2 - it.y1 >= 0)
@@ -51,7 +53,12 @@ export function ComposedGlyphs({
   const dot = upm * 0.014
 
   return (
-    <svg viewBox={`${minX - pad} ${minY - pad} ${vbW} ${vbH}`} height={height} width={(vbW / vbH) * height} className="overflow-visible">
+    <svg
+      viewBox={`${minX - pad} ${minY - pad} ${vbW} ${vbH}`}
+      preserveAspectRatio="xMidYMid meet"
+      className="h-full max-h-full w-full"
+    >
+
       {valid.map((it, i) => (
         <path
           key={i}

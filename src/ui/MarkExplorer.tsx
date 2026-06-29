@@ -48,6 +48,9 @@ export function MarkExplorer({
   const [localCoords, setLocalCoords] = useState<Record<string, number>>(coords ?? {})
   const [outlineFont, setOutlineFont] = useState<OutlineFont | null>(null)
   const useVf = !!outlineFont && axes.length > 0
+  // On viewports short by height (13" laptops), a stacked top preview gets clipped;
+  // switch to a 3-column layout (bases · preview · marks) in a wider modal instead.
+  const short = useMediaQuery('(max-height: 820px)')
 
   useEffect(() => {
     loadUnicodeNames().then(setNames).catch(() => undefined)
@@ -153,12 +156,101 @@ export function MarkExplorer({
   const toggleMark = (gid: number) =>
     setMarkGids((prev) => (prev.includes(gid) ? prev.filter((g) => g !== gid) : [...prev, gid]))
 
+  const preview = (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
+      {base ? (
+        <>
+          <div className="flex min-h-0 w-full flex-1 items-center justify-center">
+            <ComposedGlyphs items={items} anchorsUsed={anchorsUsed} showAnchors={showAnchors} upm={upm} />
+          </div>
+          <div className="flex flex-col items-center gap-0.5">
+            <div className="font-mono text-[11px] text-neutral-400 dark:text-neutral-600">{cpLine}</div>
+            {nameLine && <div className="max-w-xl text-center text-[11px] text-neutral-500 dark:text-neutral-400">{nameLine}</div>}
+            {unplaceable.length > 0 && (
+              <div className="text-[11px] text-amber-600 dark:text-amber-500">
+                {unplaceable.length} mark{unplaceable.length === 1 ? '' : 's'} can't attach here (not rendered)
+              </div>
+            )}
+            {!ma.hasMark && (
+              <div className="text-[11px] text-neutral-400 dark:text-neutral-600">no parseable mark anchors — base only</div>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="py-8 text-center text-sm text-neutral-400 dark:text-neutral-600">Select a base glyph below.</div>
+      )}
+      {axes.length > 0 && (
+        <div className="w-full max-w-3xl">
+          <AxisControls axes={axes} instances={instances} coords={localCoords} onCoords={setLocalCoords} />
+        </div>
+      )}
+    </div>
+  )
+
+  const basesColumn = (
+    <Column title={`Bases · ${inv.bases.length}`}>
+      <div className="flex flex-wrap gap-1.5">
+        {inv.bases.map((b) => (
+          <Tile
+            key={b.gid}
+            font={font}
+            glyph={b}
+            size={tileSize}
+            names={names}
+            selected={b.gid === baseGid}
+            onClick={() => setBaseGid(b.gid)}
+          />
+        ))}
+      </div>
+    </Column>
+  )
+
+  const marksColumn = (
+    <Column
+      title={`Marks · ${inv.marks.length}`}
+      action={
+        markGids.length > 0 ? (
+          <button
+            onClick={() => setMarkGids([])}
+            className="text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+          >
+            Clear
+          </button>
+        ) : undefined
+      }
+    >
+      <div className="flex flex-wrap gap-1.5">
+        {inv.marks.map((m) => {
+          const order = markGids.indexOf(m.gid)
+          const isSelected = order >= 0
+          return (
+            <Tile
+              key={m.gid}
+              font={font}
+              glyph={m}
+              size={tileSize}
+              names={names}
+              selected={isSelected}
+              disabled={!isSelected && !enabled.has(m.gid)}
+              badge={isSelected ? order + 1 : undefined}
+              onClick={() => toggleMark(m.gid)}
+            />
+          )
+        })}
+      </div>
+    </Column>
+  )
+
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 p-4 backdrop-blur-sm"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
+      <div
+        className={`flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-900 ${
+          short ? 'max-w-[92rem]' : 'max-w-5xl'
+        }`}
+      >
         {/* Header */}
         <div className="flex items-center justify-between gap-4 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
           <div className="min-w-0">
@@ -195,89 +287,46 @@ export function MarkExplorer({
           </div>
         </div>
 
-        {/* Preview */}
-        <div className="flex min-h-[36vh] flex-col items-center justify-center gap-3 border-b border-neutral-200 bg-neutral-50 px-4 py-6 dark:border-neutral-800 dark:bg-neutral-950/50">
-          {base ? (
-            <>
-              <ComposedGlyphs items={items} anchorsUsed={anchorsUsed} showAnchors={showAnchors} height={300} upm={upm} />
-              <div className="flex flex-col items-center gap-0.5">
-                <div className="font-mono text-[11px] text-neutral-400 dark:text-neutral-600">{cpLine}</div>
-                {nameLine && <div className="max-w-xl text-center text-[11px] text-neutral-500 dark:text-neutral-400">{nameLine}</div>}
-                {unplaceable.length > 0 && (
-                  <div className="text-[11px] text-amber-600 dark:text-amber-500">
-                    {unplaceable.length} mark{unplaceable.length === 1 ? '' : 's'} can't attach here (not rendered)
-                  </div>
-                )}
-                {!ma.hasMark && (
-                  <div className="text-[11px] text-neutral-400 dark:text-neutral-600">no parseable mark anchors — base only</div>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="py-8 text-sm text-neutral-400 dark:text-neutral-600">Select a base glyph below.</div>
-          )}
-          {axes.length > 0 && (
-            <div className="w-full max-w-3xl">
-              <AxisControls axes={axes} instances={instances} coords={localCoords} onCoords={setLocalCoords} />
+        {short ? (
+          /* Short viewport: bases · preview · marks side by side (preview centered). */
+          <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)] gap-px overflow-hidden bg-neutral-200 dark:bg-neutral-800">
+            {basesColumn}
+            <div className="flex min-h-0 flex-col overflow-y-auto bg-neutral-50 px-4 py-5 dark:bg-neutral-950/50">
+              {preview}
             </div>
-          )}
-        </div>
-
-        {/* Columns */}
-        <div className="grid min-h-0 flex-1 grid-cols-2 gap-px overflow-hidden bg-neutral-200 dark:bg-neutral-800">
-          <Column title={`Bases · ${inv.bases.length}`}>
-            <div className="flex flex-wrap gap-1.5">
-              {inv.bases.map((b) => (
-                <Tile
-                  key={b.gid}
-                  font={font}
-                  glyph={b}
-                  size={tileSize}
-                  names={names}
-                  selected={b.gid === baseGid}
-                  onClick={() => setBaseGid(b.gid)}
-                />
-              ))}
+            {marksColumn}
+          </div>
+        ) : (
+          <>
+            {/* Tall viewport: preview on top, bases · marks below. A DEFINITE height
+                (not min-h) so the fill-parent SVG can cap itself instead of overflowing. */}
+            <div className="flex h-[44vh] shrink-0 flex-col items-center justify-center gap-3 border-b border-neutral-200 bg-neutral-50 px-4 py-6 dark:border-neutral-800 dark:bg-neutral-950/50">
+              {preview}
             </div>
-          </Column>
-          <Column
-            title={`Marks · ${inv.marks.length}`}
-            action={
-              markGids.length > 0 ? (
-                <button
-                  onClick={() => setMarkGids([])}
-                  className="text-xs text-indigo-600 hover:underline dark:text-indigo-400"
-                >
-                  Clear
-                </button>
-              ) : undefined
-            }
-          >
-            <div className="flex flex-wrap gap-1.5">
-              {inv.marks.map((m) => {
-                const order = markGids.indexOf(m.gid)
-                const isSelected = order >= 0
-                return (
-                  <Tile
-                    key={m.gid}
-                    font={font}
-                    glyph={m}
-                    size={tileSize}
-                    names={names}
-                    selected={isSelected}
-                    disabled={!isSelected && !enabled.has(m.gid)}
-                    badge={isSelected ? order + 1 : undefined}
-                    onClick={() => toggleMark(m.gid)}
-                  />
-                )
-              })}
+            <div className="grid min-h-0 flex-1 grid-cols-2 gap-px overflow-hidden bg-neutral-200 dark:bg-neutral-800">
+              {basesColumn}
+              {marksColumn}
             </div>
-          </Column>
-        </div>
+          </>
+        )}
       </div>
     </div>,
     document.body,
   )
+}
+
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(query).matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia(query)
+    const onChange = () => setMatches(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [query])
+  return matches
 }
 
 function Column({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
