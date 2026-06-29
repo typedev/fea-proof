@@ -69,6 +69,14 @@ export function buildFormMatrix(
   const baseline = shapeSig(new Set())
   const forms = new Map<string, { gids: number[]; combo: FeatureToggle[]; count: number }>()
 
+  // For a multi-glyph fragment the meaningful form is a LIGATURE — the glyph count
+  // changes (components combine, or one decomposes). Same-length forms are just
+  // per-component swaps (one letter restyled); shown on that feature's own card, and
+  // they explode combinatorially here. A single glyph has no such notion — any
+  // change counts.
+  const isCoherent = (gids: number[]): boolean =>
+    baseline.gids.length <= 1 || gids.length !== baseline.gids.length
+
   for (let level = 1; level <= Math.min(maxLevel, k); level++) {
     let added = 0
     for (const sub of combosOfSize(k, level)) {
@@ -84,7 +92,7 @@ export function buildFormMatrix(
       } catch {
         continue
       }
-      if (s.key === baseline.key) continue
+      if (s.key === baseline.key || !isCoherent(s.gids)) continue
       const existing = forms.get(s.key)
       if (!existing) {
         forms.set(s.key, { gids: s.gids, combo: combo.slice(), count: 1 })

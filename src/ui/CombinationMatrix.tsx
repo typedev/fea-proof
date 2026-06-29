@@ -11,12 +11,11 @@ interface Item {
 }
 
 /**
- * Fullscreen explorer: one row per SINGLE glyph, showing every distinct form it
- * reaches across small combinations of the features affecting it, each rendered by
- * output gid (so feature-produced/non-cmapped forms show too) and labelled with the
- * minimal combination that produces it. Glyphs are baseline-aligned. Rows compute
- * lazily as they scroll into view (some fonts have hundreds of glyphs). Multi-glyph
- * ligature sequences are excluded — they belong on the ligature feature cards.
+ * Fullscreen explorer: one row per base fragment (a glyph, or a ligature/contextual
+ * sequence), showing every distinct form it reaches across combinations of the
+ * features affecting it, each rendered by output gid (so feature-produced/non-cmapped
+ * forms show too) and labelled with the minimal combination that produces it. Glyphs
+ * are baseline-aligned. Rows compute lazily as they scroll into view.
  */
 export function CombinationMatrix({
   font,
@@ -36,13 +35,26 @@ export function CombinationMatrix({
     const out: Item[] = []
     for (const g of groups) {
       for (const frag of g.chars) {
-        if ([...frag].length !== 1 || seen.has(frag)) continue
+        if (seen.has(frag)) continue
         seen.add(frag)
+        // A multi-glyph fragment is only meaningful here if it can LIGATE — drop
+        // sequences that never change glyph count (long-string artifacts whose only
+        // forms are per-component restyles). Cheap 2-shape probe (full matrix stays
+        // lazy). Single glyphs always kept.
+        if ([...frag].length > 1) {
+          try {
+            const base = shaper.shape(frag, { features: [] }).length
+            const allOn = shaper.shape(frag, { features: g.features.map((f) => `${f.tag}=1`) }).length
+            if (allOn >= base) continue
+          } catch {
+            continue
+          }
+        }
         out.push({ frag, features: g.features })
       }
     }
     return out
-  }, [groups])
+  }, [groups, shaper])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
