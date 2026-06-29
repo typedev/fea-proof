@@ -1,22 +1,22 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { Font } from 'opentype.js'
 import type { CombinationGroup, FeatureToggle } from '../core/combinations'
 import type { Shaper } from '../core/shape'
 import { buildFormMatrix, type FormMatrix } from '../core/matrix'
 
-interface Row {
+interface Item {
   frag: string
   features: FeatureToggle[]
-  matrix: FormMatrix
 }
 
 /**
- * Fullscreen explorer: one row per glyph, showing every DISTINCT form it reaches
- * across the powerset of the features affecting it, each rendered by output gid
- * (so feature-produced/non-cmapped forms show too) and labelled with the minimal
- * combination that produces it. Glyphs are baseline-aligned (figure forms keep
- * their real vertical position). Rendered at the default master.
+ * Fullscreen explorer: one row per SINGLE glyph, showing every distinct form it
+ * reaches across small combinations of the features affecting it, each rendered by
+ * output gid (so feature-produced/non-cmapped forms show too) and labelled with the
+ * minimal combination that produces it. Glyphs are baseline-aligned. Rows compute
+ * lazily as they scroll into view (some fonts have hundreds of glyphs). Multi-glyph
+ * ligature sequences are excluded — they belong on the ligature feature cards.
  */
 export function CombinationMatrix({
   font,
@@ -31,21 +31,18 @@ export function CombinationMatrix({
 }) {
   const [glyphSize, setGlyphSize] = useState(36)
 
-  // One row per unique base fragment (with its relevant features), keeping only
-  // those that actually reach a distinct variant form.
-  const rows = useMemo<Row[]>(() => {
+  const items = useMemo<Item[]>(() => {
     const seen = new Set<string>()
-    const out: Row[] = []
+    const out: Item[] = []
     for (const g of groups) {
       for (const frag of g.chars) {
-        if (seen.has(frag)) continue
+        if ([...frag].length !== 1 || seen.has(frag)) continue
         seen.add(frag)
-        const matrix = buildFormMatrix(shaper, frag, g.features)
-        if (matrix.forms.length > 0) out.push({ frag, features: g.features, matrix })
+        out.push({ frag, features: g.features })
       }
     }
     return out
-  }, [groups, shaper])
+  }, [groups])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -68,7 +65,7 @@ export function CombinationMatrix({
         <div className="flex items-center justify-between gap-4 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">
-              Feature combinations matrix · {rows.length}
+              Feature combinations matrix · {items.length}
             </h2>
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
               Every distinct form a glyph reaches, labelled with the minimal feature combination that produces it.
@@ -96,15 +93,13 @@ export function CombinationMatrix({
           </div>
         </div>
 
-        {/* One row per glyph */}
+        {/* One row per glyph (computed lazily on scroll) */}
         <div className="min-h-0 flex-1 divide-y divide-neutral-200 overflow-y-auto dark:divide-neutral-800">
-          {rows.map((row) => (
-            <GlyphRow key={row.frag} font={font} row={row} size={glyphSize} />
+          {items.map((it) => (
+            <GlyphRow key={it.frag} font={font} item={it} shaper={shaper} size={glyphSize} />
           ))}
-          {rows.length === 0 && (
-            <div className="px-4 py-8 text-sm text-neutral-400 dark:text-neutral-600">
-              No glyph reaches a distinct form through these features.
-            </div>
+          {items.length === 0 && (
+            <div className="px-4 py-8 text-sm text-neutral-400 dark:text-neutral-600">No combinable glyphs.</div>
           )}
         </div>
       </div>
@@ -113,18 +108,49 @@ export function CombinationMatrix({
   )
 }
 
-function GlyphRow({ font, row, size }: { font: Font; row: Row; size: number }) {
+function GlyphRow({ font, item, shaper, size }: { font: Font; item: Item; shaper: Shaper; size: number }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [matrix, setMatrix] = useState<FormMatrix | null>(null)
+
+  // Compute this row's matrix only once it nears the viewport.
+  useEffect(() => {
+    setMatrix(null)
+    const el = ref.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          io.disconnect()
+          setMatrix(buildFormMatrix(shaper, item.frag, item.features))
+        }
+      },
+      { rootMargin: '300px' },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [item.frag, item.features, shaper])
+
   return (
-    <div className="flex items-start gap-3 px-4 py-3">
-      <div className="w-10 shrink-0 pt-2 font-mono text-xs text-neutral-400 dark:text-neutral-500" title={row.features.map((f) => f.tag).join(', ')}>
-        {row.frag}
+    <div ref={ref} className="flex items-start gap-3 px-4 py-3" style={{ minHeight: size * 1.7 }}>
+      <div
+        className="w-10 shrink-0 pt-2 font-mono text-xs text-neutral-400 dark:text-neutral-500"
+        title={item.features.map((f) => f.tag).join(', ')}
+      >
+        {item.frag}
       </div>
-      <div className="flex flex-wrap gap-3">
-        <FormTile font={font} gids={row.matrix.baseline} size={size} label="plain" />
-        {row.matrix.forms.map((form, i) => (
-          <FormTile key={i} font={font} gids={form.gids} size={size} combo={form.combo} />
-        ))}
-      </div>
+      {matrix ? (
+        <div className="flex flex-wrap gap-3">
+          <FormTile font={font} gids={matrix.baseline} size={size} label="plain" />
+          {matrix.forms.map((form, i) => (
+            <FormTile key={i} font={font} gids={form.gids} size={size} combo={form.combo} />
+          ))}
+          {matrix.forms.length === 0 && (
+            <span className="pt-2 text-xs text-neutral-400 dark:text-neutral-600">no distinct forms</span>
+          )}
+        </div>
+      ) : (
+        <div className="pt-2 text-xs text-neutral-300 dark:text-neutral-700">…</div>
+      )}
     </div>
   )
 }
@@ -187,7 +213,6 @@ function BaselineGlyph({ font, gid, size }: { font: Font; gid: number; size: num
   const descent = font.descender || -upm * 0.2 // negative
   let d = ''
   try {
-    // getPath(0,0,upm) → em-unit path, Y already flipped (screen y = −fontY), baseline at 0.
     d = glyph?.getPath(0, 0, upm).toPathData(1) ?? ''
   } catch {
     d = ''
