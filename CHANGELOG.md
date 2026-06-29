@@ -10,6 +10,14 @@ OpenType feature or UI area they affect.
 
 ## [Unreleased]
 
+### Added
+- Feature Combinations **matrix** — a fullscreen explorer (open from the Feature
+  Combinations section) that, for a chosen glyph, enumerates every combination of the
+  features affecting it and shows each DISTINCT reachable form as a glyph, labelled
+  with the minimal combination that produces it. Surfaces multi-feature forms manual
+  toggling would miss (e.g. `onum + tnum`, or a stylistic set restyling a
+  numerator/superscript figure).
+
 ### Fixed
 - Ligatures no longer break when a sample wraps to a new line — each word is kept
   intact, so arrow ligatures and the like survive wrapping (most visible at large

@@ -21,6 +21,7 @@ import { rvrnSubstitutionGroups } from './core/featureVariations'
 import { readAvarSegments, inConditionCoords } from './core/coords'
 import { buildMarkInventory, hasMarkInventory } from './core/marks'
 import { MarkExplorer } from './ui/MarkExplorer'
+import { CombinationMatrix } from './ui/CombinationMatrix'
 import { useMediaQuery } from './ui/useMediaQuery'
 import type { FeatureInfo } from './core/types'
 import { FeatureVariationsContext, type FeatureVariationsData } from './render/featureVariationsContext'
@@ -148,6 +149,7 @@ function Loaded({
     [loaded],
   )
   const [markExplorer, setMarkExplorer] = useState<FeatureInfo | null>(null)
+  const [matrixOpen, setMatrixOpen] = useState(false)
 
   // GSUB FeatureVariations (rvrn): grouped substitutions, keyed by the feature
   // tag they substitute, so each renders inside that feature's (navigable) card.
@@ -251,6 +253,7 @@ function Loaded({
         cssFamily={loaded.cssFamily}
         size={Math.max(size, 36)}
         shaper={shaper}
+        onOpenMatrix={shaper ? () => setMatrixOpen(true) : undefined}
       />
       <OrphanGlyphs font={loaded.font} gids={orphans} size={size} />
     </div>
@@ -276,6 +279,14 @@ function Loaded({
           variations={variations}
           coords={coords}
           onClose={() => setMarkExplorer(null)}
+        />
+      )}
+      {matrixOpen && shaper && (
+        <CombinationMatrix
+          font={loaded.font}
+          groups={combinations}
+          shaper={shaper}
+          onClose={() => setMatrixOpen(false)}
         />
       )}
       </FeatureVariationsContext.Provider>

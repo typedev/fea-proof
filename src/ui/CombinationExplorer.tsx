@@ -98,23 +98,36 @@ export function CombinationExplorer({
   cssFamily,
   size = 40,
   shaper,
+  onOpenMatrix,
 }: {
   groups: CombinationGroup[]
   cssFamily: string
   size?: number
   shaper?: Shaper
+  /** Open the fullscreen matrix that auto-enumerates every reachable form. */
+  onOpenMatrix?: () => void
 }) {
   if (groups.length === 0) return null
 
   return (
     <div id="feature-combinations" style={{ scrollMarginTop: 'var(--scroll-offset, 1rem)' }} className="space-y-3">
-      <div className="px-1">
-        <h2 className="text-lg font-semibold">Feature combinations</h2>
-        <p className="text-sm text-neutral-500">
-          Glyphs touched by several features — toggle features (applied in the font's
-          LookupList order) to see how they stack. Dimmed chips have no effect in the
-          current combination (overridden or unmet dependency).
-        </p>
+      <div className="flex items-start justify-between gap-4 px-1">
+        <div>
+          <h2 className="text-lg font-semibold">Feature combinations</h2>
+          <p className="text-sm text-neutral-500">
+            Glyphs touched by several features — toggle features (applied in the font's
+            LookupList order) to see how they stack. Dimmed chips have no effect in the
+            current combination (overridden or unmet dependency).
+          </p>
+        </div>
+        {shaper && onOpenMatrix && (
+          <button
+            onClick={onOpenMatrix}
+            className="mt-1 shrink-0 whitespace-nowrap text-sm text-indigo-600 hover:underline dark:text-indigo-400"
+          >
+            Open combinations matrix →
+          </button>
+        )}
       </div>
       {groups.map((g, i) => (
         <CombinationCard key={i} group={g} cssFamily={cssFamily} size={size} shaper={shaper} />
