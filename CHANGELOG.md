@@ -23,6 +23,10 @@ OpenType feature or UI area they affect.
   restyling ligatures) no longer fabricates a misleading cross-feature proof in its
   card — it now points to the Feature Combinations explorer. This also removes
   occasional garbled demo words on decorative faces.
+- Demo words now render the highlighted target in its own shaping run (its feature
+  on) with the surrounding text ligatures-off, so a greedy/longer ligature can't
+  absorb the target and the tile shows exactly the substitution it claims (e.g. an
+  `AA` ligature instead of `MA`+`AR`).
 
 ## 2026-06-29
 
