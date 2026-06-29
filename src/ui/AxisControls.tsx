@@ -45,7 +45,7 @@ export function AxisControls({
         {collapsible && (
           <button
             onClick={() => setOpen((o) => !o)}
-            className="text-sm text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-100"
+            className="text-sm text-indigo-600 hover:underline dark:text-indigo-400"
           >
             {open ? '▾' : '▸'} Variations · {visible.length} axes
           </button>
