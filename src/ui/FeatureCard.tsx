@@ -125,6 +125,19 @@ export function FeatureCard({
         </div>
       ) : (
         <div className="mt-3 space-y-3">
+          {sample.seeCombinations && sample.note && (
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-400">
+              {sample.note}{' '}
+              <button
+                onClick={() =>
+                  document.getElementById('feature-combinations')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+                className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+              >
+                Jump →
+              </button>
+            </div>
+          )}
           {sample.text && (
             <div>
               <Preview

@@ -51,6 +51,9 @@ export type FeatureSample =
       labels?: { before: string; after: string }
       /** Render each token as an isolated shaping run (mixed-script ordinals). */
       isolate?: boolean
+      /** Feature acts only on glyphs other features produce — point to combinations
+       *  instead of synthesising a cross-feature proof in this card. */
+      seeCombinations?: boolean
     }
   | { tag: string; kind: 'locl'; languages: LoclLanguageSample[] }
   | { tag: string; kind: 'alternates'; alternates: { char: string; indices: number[] }[] }
@@ -297,62 +300,66 @@ function buildAlternatesSample(
 }
 
 /**
- * Cross-feature cascade: a single-sub feature whose inputs are glyphs produced by
- * ANOTHER feature (e.g. a stylistic set that restyles dlig ligatures, often
- * PUA-encoded). Trace those inputs back to base characters + the producer
- * feature(s), and proof as [producers on] → [producers on + target on], so the
- * sample is readable (base letters) and shows the real cascade.
+ * A single-sub feature whose inputs are ALL derived — only reachable via another
+ * feature (e.g. a stylistic set restyling dlig ligatures, often PUA-encoded). The
+ * feature has no standalone effect, so its card can't honestly proof it on its own;
+ * return the producer feature tag(s) so the card can point to Feature Combinations.
+ * Returns null for an ordinary single-sub (any plainly-cmapped base input).
  */
-function buildCascadeSample(
+function cascadeProducers(
   font: Font,
   feature: FeatureInfo,
   reverse: Map<number, number[]>,
   graph: ReturnType<typeof buildSubstGraph>,
-  shaper?: Shaper,
-): FeatureSample | null {
+): string[] | null {
   const lookupIndexes = new Set<number>()
   for (const occ of feature.occurrences) for (const li of occ.lookupIndexes) lookupIndexes.add(li)
   const gids = inputGlyphsForLookups(font, lookupIndexes)
   if (gids.length === 0) return null
 
-  const fragments: string[] = []
-  const seen = new Set<string>()
   const producers = new Set<string>()
   for (const g of gids) {
     // A real (non-PUA) cmap input means this is an ordinary single-sub (e.g. c2sc
-    // on base capitals) — let the normal path handle it, even if some other inputs
-    // are derived alternates. Cascade is only for ALL-derived features (e.g. a
-    // stylistic set acting solely on PUA-encoded ligatures).
+    // on base capitals) — let the normal path handle it.
     const cps = reverse.get(g)
     if (cps && cps.some((cp) => !isPUA(cp))) return null
     const r = resolveGlyph(g, reverse, graph, { preferProduced: true, excludeTag: feature.tag })
-    if (!r || r.features.length === 0) continue
-    // aalt/salt are catch-all alternate features — enabling them as a "producer"
-    // mass-substitutes arbitrary first-alternates, so never treat them as context.
-    const feats = r.features.filter((f) => f !== 'aalt' && f !== 'salt')
-    if (feats.length === 0) continue
-    feats.forEach((f) => producers.add(f))
-    if (!seen.has(r.chars) && !NOT_DISPLAYABLE.test(r.chars)) {
-      seen.add(r.chars)
-      fragments.push(r.chars)
-    }
+    if (!r) continue
+    // aalt/salt are catch-all alternate features, not a meaningful producer context.
+    for (const f of r.features) if (f !== 'aalt' && f !== 'salt') producers.add(f)
   }
-  if (producers.size === 0 || fragments.length === 0) return null
+  return producers.size > 0 ? [...producers].sort() : null
+}
 
-  const on = [...producers].map((p) => `${p}=1`)
-  const before = [...on, ...(feature.defaultOn ? [`${feature.tag}=0`] : [])]
-  const after = [...on, `${feature.tag}=1`]
-  const text = fragments.slice(0, 16).join('  ')
+/**
+ * Card content for a feature that only acts in combination (all inputs are produced
+ * by other features): a pointer to the Feature Combinations explorer, naming the
+ * producer feature(s). The card shows no synthesised cross-feature proof.
+ */
+function combinationPointer(tag: string, producers: string[], examples: ContextualExample[]): FeatureSample {
   return {
-    tag: feature.tag,
+    tag,
     kind: 'single',
-    text,
+    text: '',
     usedCoverage: false,
-    affected: fragments,
-    highlightRanges: shapingHighlight(shaper, text, { features: before }, { features: after }, undefined, false),
-    settings: { before: toCss(before), after: toCss(after) },
-    labels: cascadeLabels([...producers], feature.tag),
+    affected: [],
+    seeCombinations: true,
+    note:
+      producers.length > 0
+        ? `Only restyles glyphs that ${producers.join(', ')} produce — explore it in Feature Combinations.`
+        : 'Only acts in combination with other features — explore it in Feature Combinations.',
+    examples: examples.length > 0 ? examples : undefined,
   }
+}
+
+/**
+ * Cell labels for a type-4 ligature cascade (a ligature whose components include
+ * glyphs another feature/axis makes). The "before" cell keeps any producer(s) on,
+ * so name the context instead of a bare (lying) "default".
+ */
+function cascadeLabels(producers: string[], tag: string): { before: string; after: string } {
+  const ctx = [...new Set(producers)].sort().join(' + ')
+  return ctx ? { before: ctx, after: `${ctx} + ${tag}` } : { before: 'default', after: tag }
 }
 
 /** Hb feature strings → CSS font-feature-settings ("calt=0" → `"calt" 0`). */
@@ -364,17 +371,6 @@ function toCss(features: string[]): string {
       return `"${tag}" ${value}`
     })
     .join(', ')
-}
-
-/**
- * Cell labels for a cascade proof. The "before" cell keeps the producer
- * feature(s) on (the target has nothing to act on without them), so a bare
- * "default" label would lie — name the actual context instead, e.g.
- * `dlig` → `dlig + ss03`, or `numr + dnom` → `numr + dnom + frac`.
- */
-function cascadeLabels(producers: string[], tag: string): { before: string; after: string } {
-  const ctx = [...new Set(producers)].sort().join(' + ')
-  return ctx ? { before: ctx, after: `${ctx} + ${tag}` } : { before: 'default', after: tag }
 }
 
 /**
@@ -567,8 +563,9 @@ export async function prepareSamples(
         noteScripts(sequences.map((s) => s[0]))
         handled = true
       } else if (cascades.length > 0) {
-        // Every ligature consumes glyphs another feature makes (e.g. frac ligating
-        // aalt-made digit forms): enable producers, then toggle the target.
+        // The ligature IS this feature's own effect, but its components include a
+        // glyph another feature/axis makes (e.g. liga ligating an italic-axis form):
+        // enable any producer(s), then toggle the target, and show the ligature.
         const producers = [...new Set(cascades.flatMap((c) => c.producers))]
         const seqs = cascades.map((c) => c.text)
         const on = producers.map((p) => `${p}=1`)
@@ -592,13 +589,11 @@ export async function prepareSamples(
       }
     }
     if (!handled && types.includes(1)) {
-      // Cross-feature cascade: inputs are glyphs another feature produces.
-      const cascade = buildCascadeSample(font, feature, reverse, graph, shaper)
-      if (cascade) {
-        if (examples.length > 0 && cascade.kind !== 'locl' && cascade.kind !== 'alternates') {
-          cascade.examples = examples
-        }
-        result.set(feature.tag, cascade)
+      // All inputs produced by another feature → no standalone effect; point to
+      // Feature Combinations rather than fabricating a cross-feature proof.
+      const producers = cascadeProducers(font, feature, reverse, graph)
+      if (producers) {
+        result.set(feature.tag, combinationPointer(feature.tag, producers, examples))
         handled = true
       } else {
         const chars = affectedInputChars(font, feature, reverse)
