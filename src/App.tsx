@@ -24,6 +24,7 @@ import { CombinationMatrix } from './ui/CombinationMatrix'
 import { useMediaQuery } from './ui/useMediaQuery'
 import type { FeatureInfo } from './core/types'
 import { FeatureVariationsContext, type FeatureVariationsData } from './render/featureVariationsContext'
+import { SupportedCodepointsContext } from './render/supportedCodepointsContext'
 
 type Theme = 'light' | 'dark'
 
@@ -226,7 +227,7 @@ function Loaded({
         const reverse = buildReverseCmap(loaded.font)
         const graph = buildSubstGraph(loaded.font, features)
         setCombinations(findCombinations(loaded.font, features, reverse, graph, sh))
-        return prepareSamples(loaded.font, features, sh)
+        return prepareSamples(loaded.font, features, sh, loaded.supportedCodepoints)
       })
       .then((result) => {
         if (!cancelled && result) setSamples(result)
@@ -290,6 +291,7 @@ function Loaded({
   return (
     <VariationSettingsContext.Provider value={varSettings}>
       <FeatureVariationsContext.Provider value={featureVariationsValue}>
+      <SupportedCodepointsContext.Provider value={loaded.supportedCodepoints}>
       {railMode ? (
         <div className="flex items-start gap-6">
           {column}
@@ -309,6 +311,7 @@ function Loaded({
           onClose={() => setMarkExplorer(null)}
         />
       )}
+      </SupportedCodepointsContext.Provider>
       </FeatureVariationsContext.Provider>
     </VariationSettingsContext.Provider>
   )

@@ -178,6 +178,7 @@ async function buildLoclSample(
   feature: FeatureInfo,
   reverse: Map<number, number[]>,
   shaper?: Shaper,
+  supportedCps?: Set<number>,
 ): Promise<FeatureSample | null> {
   const seen = new Set<string>()
   const contexts: { script: string; lang: string; lookupIndexes: number[] }[] = []
@@ -209,7 +210,7 @@ async function buildLoclSample(
     const pool = nativePool.length > 0 ? nativePool : bank[script] ?? []
     const { text, usedCoverage } =
       pool.length > 0
-        ? pickSample(chars, { [script]: pool })
+        ? pickSample(chars, { [script]: pool }, { supportedCps })
         : { text: coverageString(chars), usedCoverage: true }
     const hbScript = HB_SCRIPT[script as Script]
     const highlightRanges = info?.bcp47
@@ -427,6 +428,7 @@ export async function prepareSamples(
   font: Font,
   features: FeatureInfo[],
   shaper?: Shaper,
+  supportedCps?: Set<number>,
 ): Promise<Map<string, FeatureSample>> {
   const reverse = buildReverseCmap(font)
   const graph = buildSubstGraph(font, features)
@@ -443,7 +445,7 @@ export async function prepareSamples(
 
   for (const feature of features) {
     if (feature.tag === 'locl') {
-      const locl = await buildLoclSample(font, feature, reverse, shaper)
+      const locl = await buildLoclSample(font, feature, reverse, shaper, supportedCps)
       if (locl) result.set(feature.tag, locl)
       continue
     }
@@ -653,11 +655,11 @@ export async function prepareSamples(
     if (item.kind === 'ligature') {
       const script = item.sequences![0] ? classifyScript(item.sequences![0][0]) : null
       const pool = (script && bank[script]) || []
-      ;({ text, usedCoverage } = pickLigatureSample(item.sequences!, pool, { offset }))
+      ;({ text, usedCoverage } = pickLigatureSample(item.sequences!, pool, { offset, supportedCps }))
     } else if (item.text !== undefined) {
       text = item.text
     } else {
-      ;({ text, usedCoverage } = pickSample(item.chars!, bank, { offset }))
+      ;({ text, usedCoverage } = pickSample(item.chars!, bank, { offset, supportedCps }))
     }
     result.set(item.tag, {
       tag: item.tag,

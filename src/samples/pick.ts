@@ -42,6 +42,9 @@ export interface PickOptions {
    *  Shorter words are still used as a fallback to cover an otherwise-orphan
    *  character. */
   minLen?: number
+  /** Code points the font can render — words needing any other glyph are skipped
+   *  (they'd fall back to a system font). Omit to disable the check. */
+  supportedCps?: Set<number>
 }
 
 /** Rotate an array left by k (returns the same array when k is 0). */
@@ -49,6 +52,18 @@ function rotate<T>(arr: T[], k: number): T[] {
   if (arr.length === 0) return arr
   const n = ((k % arr.length) + arr.length) % arr.length
   return n === 0 ? arr : [...arr.slice(n), ...arr.slice(0, n)]
+}
+
+/**
+ * Whether the font can render every code point of `word` directly (has a cmap
+ * entry for each). A word with even one uncovered glyph would fall back to a
+ * system font and look broken, so such words are rejected from samples. An
+ * absent/empty support set means "unknown" — don't filter (keeps old behaviour).
+ */
+export function coverable(word: string, supported?: Set<number>): boolean {
+  if (!supported || supported.size === 0) return true
+  for (const ch of word) if (!supported.has(ch.codePointAt(0)!)) return false
+  return true
 }
 
 /** Stable small hash of a string, for deriving a per-feature pool offset. */
@@ -73,6 +88,7 @@ export function pickSample(
   const maxWords = options.maxWords ?? 6
   const maxChars = options.maxChars ?? 56
   const minLen = options.minLen ?? 4
+  const cps = options.supportedCps
 
   const coverageString = () => ({
     text: [...chars].sort((a, b) => a.codePointAt(0)! - b.codePointAt(0)!).join(''),
@@ -113,6 +129,7 @@ export function pickSample(
       if (chosen.length >= maxWords || remaining.size === 0 || total >= maxChars) break
       if (word.length < minWordLen || chosenSet.has(word)) continue
       if (!reLetter.test(word[0])) continue // skip tokens like "'s"
+      if (!coverable(word, cps)) continue // skip words the font can't fully render
       if (![...word].some((ch) => remaining.has(ch.toLowerCase()))) continue
       take(word)
     }
@@ -126,6 +143,7 @@ export function pickSample(
     for (const word of pool) {
       if (chosen.length >= minWords || total >= maxChars) break
       if (word.length < minLen || chosenSet.has(word) || !reLetter.test(word[0])) continue
+      if (!coverable(word, cps)) continue
       if (![...word].some((ch) => target.has(ch.toLowerCase()))) continue
       take(word)
     }
@@ -152,7 +170,7 @@ const LIG_SCAN_LIMIT = 40000
 const reLower = /\p{Ll}/u
 const reUpper = /\p{Lu}/u
 
-export function findLigatureWord(seq: string, pool: string[]): string | null {
+export function findLigatureWord(seq: string, pool: string[], supportedCps?: Set<number>): string | null {
   const seqLower = seq.toLowerCase()
   const allUpper = seq !== seqLower && seq === seq.toUpperCase()
   const fit = (w: string, idx: number) =>
@@ -172,8 +190,10 @@ export function findLigatureWord(seq: string, pool: string[]): string | null {
     if (w.length > 14) continue
     const idx = w.toLowerCase().indexOf(seqLower)
     if (idx < 0 || !seamOk(w, idx)) continue
-    if (w.length >= seq.length + 2) return fit(w, idx) // long enough for context
-    if (!fallback) fallback = fit(w, idx)
+    const fitted = fit(w, idx)
+    if (!coverable(fitted, supportedCps)) continue // word the font can't fully render
+    if (w.length >= seq.length + 2) return fitted // long enough for context
+    if (!fallback) fallback = fitted
   }
   return fallback
 }
@@ -187,7 +207,7 @@ export function findLigatureWord(seq: string, pool: string[]): string | null {
 export function pickLigatureSample(
   sequences: string[],
   basePool: string[],
-  options: { maxWords?: number; maxBare?: number; offset?: number } = {},
+  options: { maxWords?: number; maxBare?: number; offset?: number; supportedCps?: Set<number> } = {},
 ): SampleResult {
   const maxWords = options.maxWords ?? 6
   const maxBare = options.maxBare ?? 8
@@ -202,7 +222,7 @@ export function pickLigatureSample(
     for (const sequence of sequences) {
       if (words.length >= maxWords) break
       if (covered.has(sequence)) continue
-      const word = findLigatureWord(sequence, pool)
+      const word = findLigatureWord(sequence, pool, options.supportedCps)
       if (!word || words.includes(word)) continue
       words.push(word)
       const lw = word.toLowerCase()

@@ -17,6 +17,9 @@ export interface LoadedFont {
   hasGsub: boolean
   /** Decompressed sfnt bytes (for HarfBuzz shaping). */
   sfnt: ArrayBuffer
+  /** Code points the font has a cmap entry for — used to reject word samples
+   *  containing glyphs the font lacks (which would fall back to a system font). */
+  supportedCodepoints: Set<number>
   /** fvar axes + named instances, or null if not a variable font. */
   variations: FontVariations | null
 }

@@ -12,7 +12,7 @@
 // sequence, so no shaping is needed.
 
 import { changedRanges, type Shaper } from '../core/shape'
-import { classifyScript, findLigatureWord } from './pick'
+import { classifyScript, coverable, findLigatureWord } from './pick'
 import { loadWordBank, type Script } from './languages'
 import type { PositionRole } from '../render/featureSettings'
 
@@ -45,7 +45,7 @@ const SINGLE_CAND_SCAN = 40000
  * so we try them in turn and let the shaping check pick the one that fires. Words
  * are case-fitted to the char.
  */
-function singleCandidates(char: string, pool: string[], max = 9, role?: PositionRole): string[] {
+function singleCandidates(char: string, pool: string[], max = 9, role?: PositionRole, supportedCps?: Set<number>): string[] {
   const lc = char.toLowerCase()
   const upper = char !== lc && char === char.toUpperCase()
   const fit = (w: string) => (upper ? w.toUpperCase() : w)
@@ -58,8 +58,10 @@ function singleCandidates(char: string, pool: string[], max = 9, role?: Position
     if (w.length < 4 || w.length > 14) continue
     const idx = w.toLowerCase().indexOf(lc)
     if (idx < 0) continue
+    const fitted = fit(w)
+    if (!coverable(fitted, supportedCps)) continue // skip words the font can't fully render
     const bucket = idx === 0 ? starts : idx + lc.length === w.length ? ends : mids
-    bucket.push(fit(w))
+    bucket.push(fitted)
   }
   // A positional feature (init/fina/medi) needs the glyph in that exact spot.
   if (role === 'start') return starts.slice(0, max)
@@ -98,6 +100,7 @@ export async function inlineSamples(
   proof?: SpotlightProof,
   shaper?: Shaper,
   position?: PositionRole,
+  supportedCps?: Set<number>,
 ): Promise<Map<string, InlineSample | null>> {
   const bank = await getBank()
   const map = new Map<string, InlineSample | null>()
@@ -126,14 +129,14 @@ export async function inlineSamples(
     // A multi-codepoint item is a sequence — it always contains the whole thing,
     // so no positional ambiguity and no shaping needed.
     if (isLigature || [...item].length > 1) {
-      const word = findLigatureWord(item, pool)
+      const word = findLigatureWord(item, pool, supportedCps)
       map.set(item, word ? { text: word, ranges: stringRange(word) } : null)
       continue
     }
 
     // Positional feature (init/fina/medi/isol): the demo word must place the
     // glyph in that position, and only that occurrence is highlighted.
-    const cands = position === 'isolated' ? [item] : singleCandidates(item, pool, 9, position)
+    const cands = position === 'isolated' ? [item] : singleCandidates(item, pool, 9, position, supportedCps)
     if (cands.length === 0) {
       map.set(item, null)
       continue

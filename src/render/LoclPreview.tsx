@@ -4,6 +4,7 @@ import type { Shaper } from '../core/shape'
 import { inlineSamples, type InlineSample } from '../samples/spotlight'
 import { highlightRanges } from './highlight'
 import { useVariationSettings } from './variationContext'
+import { useSupportedCodepoints } from './supportedCodepointsContext'
 import { codepoints } from '../ui/AffectedGlyphs'
 
 // Above this many localized forms, collapse the inventory behind a toggle.
@@ -122,17 +123,18 @@ function Inventory({
   const off: CSSProperties = { ...base, fontFamily: `"${cssFamily}", system-ui`, fontSize: glyphSize }
   const on: CSSProperties = { ...localized, fontFamily: `"${cssFamily}", system-ui`, fontSize: glyphSize }
 
+  const supportedCps = useSupportedCodepoints()
   const [words, setWords] = useState<Map<string, InlineSample | null> | null>(null)
   useEffect(() => {
     let cancelled = false
     setWords(null)
-    inlineSamples(l.affected, false, { kind: 'locl', bcp47: l.bcp47 }, shaper).then((m) => {
+    inlineSamples(l.affected, false, { kind: 'locl', bcp47: l.bcp47 }, shaper, undefined, supportedCps).then((m) => {
       if (!cancelled) setWords(m)
     })
     return () => {
       cancelled = true
     }
-  }, [l.affected, l.bcp47, shaper])
+  }, [l.affected, l.bcp47, shaper, supportedCps])
 
   return (
     <div className="flex flex-wrap gap-1.5">

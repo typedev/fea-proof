@@ -24,6 +24,13 @@ OpenType feature or UI area they affect.
   separately.
 
 ### Fixed
+- Word samples no longer include words the font can't fully render. Sample and
+  inline demo words are now checked against the font's actual character set, so a
+  word with any missing glyph (which would fall back to a system font and look
+  broken) is skipped in favour of one that fits — e.g. Vietnamese words on a font
+  lacking those accents, or Greek words on a font whose only Greek is the µ/π/Ω
+  math symbols. Partially-covered languages still appear; only the unrenderable
+  words are filtered out.
 - The font-name specimen heading no longer faux-bolds the font. It rendered the
   loaded font at weight 600, so a face without a real semibold was synthetically
   bolded (and slanted); it now shows at the font's natural weight with

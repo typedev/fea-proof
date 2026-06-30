@@ -4,6 +4,7 @@ import { classifyScript } from '../samples/pick'
 import { inlineSamples, type InlineSample } from '../samples/spotlight'
 import { highlightRanges } from '../render/highlight'
 import { useVariationSettings } from '../render/variationContext'
+import { useSupportedCodepoints } from '../render/supportedCodepointsContext'
 import type { Shaper } from '../core/shape'
 
 const SCRIPT_LABELS: Record<string, string> = {
@@ -64,6 +65,7 @@ export function AffectedGlyphs({
   const orderedGroups = SCRIPT_ORDER.filter((k) => groups.has(k))
 
   const fontVariationSettings = useVariationSettings()
+  const supportedCps = useSupportedCodepoints()
   const offStyle: CSSProperties = { fontFamily: family, fontFeatureSettings: before, fontSize: glyphSize, fontVariationSettings }
   const onStyle: CSSProperties = { fontFamily: family, fontFeatureSettings: after, fontSize: glyphSize, fontVariationSettings }
 
@@ -76,13 +78,13 @@ export function AffectedGlyphs({
     }
     let cancelled = false
     setWords(null)
-    inlineSamples(affected, isLigature, { kind: 'feature', before, after }, shaper, positionalRole(tag)).then((m) => {
+    inlineSamples(affected, isLigature, { kind: 'feature', before, after }, shaper, positionalRole(tag), supportedCps).then((m) => {
       if (!cancelled) setWords(m)
     })
     return () => {
       cancelled = true
     }
-  }, [affected, isLigature, spotlight, before, after, shaper, tag])
+  }, [affected, isLigature, spotlight, before, after, shaper, tag, supportedCps])
 
   return (
     <div className="mt-3 space-y-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950/50">

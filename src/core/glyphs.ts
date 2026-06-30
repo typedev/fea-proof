@@ -25,6 +25,21 @@ export function buildReverseCmap(font: Font): Map<number, number[]> {
   return reverse
 }
 
+/**
+ * The set of Unicode code points the font can render directly (has a cmap entry
+ * for). Used to reject word samples that contain a glyph the font lacks — those
+ * would otherwise fall back to a system font and read as broken (e.g. Vietnamese
+ * đ/ư on a font that only happens to carry a currency sign, or Greek words on a
+ * font whose only "Greek" is the µ/π/Ω math symbols).
+ */
+export function buildSupportedCodepoints(font: Font): Set<number> {
+  const cmap = (font.tables as Record<string, { glyphIndexMap?: Record<string, number> }>).cmap
+  const glyphIndexMap = cmap?.glyphIndexMap ?? {}
+  const set = new Set<number>()
+  for (const codePoint in glyphIndexMap) set.add(Number(codePoint))
+  return set
+}
+
 /** Expand a Coverage table into a flat list of glyph ids. */
 export function coverageGlyphs(coverage: Coverage | undefined): number[] {
   if (!coverage) return []

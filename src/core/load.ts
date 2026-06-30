@@ -2,6 +2,7 @@ import { parse, type Font } from 'opentype.js'
 import { decompressWoff2 } from './woff2'
 import type { LoadedFont } from './types'
 import { readVariations, findTable } from './variations'
+import { buildSupportedCodepoints } from './glyphs'
 
 const WOFF2_SIGNATURE = 0x774f4632 // 'wOF2'
 
@@ -128,6 +129,7 @@ export async function loadFont(file: File): Promise<LoadedFont> {
     scripts: collectScripts(font),
     hasGsub: !!(font.tables as Record<string, unknown>).gsub,
     sfnt,
+    supportedCodepoints: buildSupportedCodepoints(font),
     variations: readVariations(font, sfnt),
   }
 }
