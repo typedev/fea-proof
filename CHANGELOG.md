@@ -10,6 +10,21 @@ OpenType feature or UI area they affect.
 
 ## [Unreleased]
 
+### Fixed
+- The glyph-outline cells (Feature combinations and Unreachable glyphs) now render
+  through HarfBuzz instead of opentype.js. This fixes two variable-font problems:
+  composite glyphs no longer vanish to their glyph name (opentype.js produced NaN
+  path data for composites at a fractional baseline), and the cells now follow the
+  axis sliders — outlines interpolate with the design coordinates like every other
+  cell, instead of being frozen at the default master.
+
+### Changed
+- Feature combinations are now coordinate-aware on fonts with conditional
+  substitutions (GSUB FeatureVariations): the stacked forms re-shape at the current
+  design coordinate, so a substitution that fires only inside an axis range shows up
+  in the matrix once that range is entered (e.g. via a feature card's "apply
+  coordinates"). Fonts without FeatureVariations keep the single up-front enumeration.
+
 ## 2026-06-29
 
 ### Added

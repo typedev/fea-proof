@@ -3,6 +3,7 @@ import type { Font } from 'opentype.js'
 import type { VariationAxis } from '../core/variations'
 import { toUserCoord, type AvarSegments } from '../core/coords'
 import type { AxisRange, RvrnGroup } from '../core/featureVariations'
+import type { OutlineFont } from '../core/shape'
 import { GlyphOutline } from './GlyphOutline'
 
 const INITIAL = 24
@@ -35,6 +36,8 @@ export function FeatureVariationsGroups({
   size = 30,
   applyByLookup,
   onApply,
+  outline,
+  coords,
 }: {
   font: Font
   axes: VariationAxis[]
@@ -43,8 +46,13 @@ export function FeatureVariationsGroups({
   size?: number
   applyByLookup: Map<number, Record<string, number>>
   onApply: (coords: Record<string, number>) => void
+  outline?: OutlineFont
+  coords?: Record<string, number>
 }) {
   const axisByTag = useMemo(() => new Map(axes.map((a) => [a.tag, a])), [axes])
+  // Point the shared HB outline font at the current coords once, before the tiles
+  // render below (React renders parent-before-child, so the GlyphOutlines read it).
+  if (outline && coords) outline.setVariations(coords)
 
   return (
     <div className="space-y-3">
@@ -63,6 +71,8 @@ export function FeatureVariationsGroups({
           size={size}
           apply={applyByLookup.get(g.lookupIndex)}
           onApply={onApply}
+          outline={outline}
+          coords={coords}
         />
       ))}
     </div>
@@ -77,6 +87,8 @@ function Group({
   size,
   apply,
   onApply,
+  outline,
+  coords,
 }: {
   font: Font
   group: RvrnGroup
@@ -85,6 +97,8 @@ function Group({
   size: number
   apply?: Record<string, number>
   onApply: (coords: Record<string, number>) => void
+  outline?: OutlineFont
+  coords?: Record<string, number>
 }) {
   const [showAll, setShowAll] = useState(false)
   const shown = showAll ? group.pairs : group.pairs.slice(0, INITIAL)
@@ -168,9 +182,9 @@ function Group({
             title={`${font.glyphs.get(p.inGid)?.name ?? p.inGid} → ${font.glyphs.get(p.outGid)?.name ?? p.outGid}`}
           >
             <span className="flex items-center gap-1">
-              <GlyphOutline font={font} gid={p.inGid} size={glyphSize} className="text-neutral-400 dark:text-neutral-600" />
+              <GlyphOutline font={font} gid={p.inGid} size={glyphSize} outline={outline} coords={coords} className="text-neutral-400 dark:text-neutral-600" />
               <span className="text-[10px] text-neutral-400 dark:text-neutral-600">→</span>
-              <GlyphOutline font={font} gid={p.outGid} size={glyphSize} className="text-neutral-900 dark:text-neutral-100" />
+              <GlyphOutline font={font} gid={p.outGid} size={glyphSize} outline={outline} coords={coords} className="text-neutral-900 dark:text-neutral-100" />
             </span>
           </div>
         ))}

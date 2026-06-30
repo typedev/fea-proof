@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Font } from 'opentype.js'
+import type { OutlineFont } from '../core/shape'
 import { GlyphOutline } from './GlyphOutline'
 
 const INITIAL = 80
@@ -10,11 +11,25 @@ const INITIAL = 80
  * directly from their outlines (they can't be addressed as text). Uses the shared
  * GlyphOutline + glyph-inventory tile style and size cap (Math.min(size, 30)).
  */
-export function OrphanGlyphs({ font, gids, size = 30 }: { font: Font; gids: number[]; size?: number }) {
+export function OrphanGlyphs({
+  font,
+  gids,
+  size = 30,
+  outline,
+  coords,
+}: {
+  font: Font
+  gids: number[]
+  size?: number
+  outline?: OutlineFont
+  coords?: Record<string, number>
+}) {
   const [showAll, setShowAll] = useState(false)
   if (gids.length === 0) return null
   const shown = showAll ? gids : gids.slice(0, INITIAL)
   const glyphSize = Math.min(size, 30)
+  // Aim the shared HB outline font at the current coords before the tiles render.
+  if (outline && coords) outline.setVariations(coords)
 
   return (
     <section id="unreachable-glyphs" style={{ scrollMarginTop: 'var(--scroll-offset, 1rem)' }} className="space-y-2">
@@ -31,7 +46,7 @@ export function OrphanGlyphs({ font, gids, size = 30 }: { font: Font; gids: numb
             title={`${font.glyphs.get(gid)?.name ?? 'glyph'} · gid ${gid}`}
             className="flex flex-col items-center rounded-md border border-neutral-200 bg-white px-2 py-1 dark:border-neutral-800 dark:bg-neutral-900"
           >
-            <GlyphOutline font={font} gid={gid} size={glyphSize} className="text-neutral-900 dark:text-neutral-100" />
+            <GlyphOutline font={font} gid={gid} size={glyphSize} outline={outline} coords={coords} className="text-neutral-900 dark:text-neutral-100" />
             <span className="font-mono text-[9px] text-neutral-400 dark:text-neutral-600">{gid}</span>
           </div>
         ))}

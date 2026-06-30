@@ -248,6 +248,8 @@ export function FeatureCard({
             size={size}
             applyByLookup={fv.applyByLookup}
             onApply={fv.onApply}
+            outline={fv.outline}
+            coords={fv.coords}
           />
         </div>
       )}

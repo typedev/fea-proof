@@ -6,7 +6,7 @@ import { buildSubstGraph } from './core/substitution'
 import { findCombinations, type CombinationGroup } from './core/combinations'
 import { findOrphanGlyphs } from './core/inspect'
 import { OrphanGlyphs } from './ui/OrphanGlyphs'
-import { loadShaper, type Shaper } from './core/shape'
+import { loadShaper, loadOutlineFont, type Shaper, type OutlineFont } from './core/shape'
 import { prepareSamples, type FeatureSample } from './samples'
 import type { LoadedFont } from './core/types'
 import { defaultCoords } from './core/variations'
@@ -130,6 +130,11 @@ function Loaded({
   const [samples, setSamples] = useState<Map<string, FeatureSample>>(new Map())
   const [combinations, setCombinations] = useState<CombinationGroup[]>([])
   const [shaper, setShaper] = useState<Shaper | undefined>(undefined)
+  // Isolated HarfBuzz font for outline cells (combinations / unreachable / rvrn
+  // groups): HB interpolates gvar and has no composite-glyph NaN bug, unlike the
+  // opentype.js paths. Its own variation state, decoupled from `shaper` and from
+  // the mark explorer's instance.
+  const [outlineFont, setOutlineFont] = useState<OutlineFont | undefined>(undefined)
   const [size, setSize] = useState(30)
 
   const variations = loaded.variations
@@ -151,7 +156,7 @@ function Loaded({
 
   // GSUB FeatureVariations (rvrn): grouped substitutions, keyed by the feature
   // tag they substitute, so each renders inside that feature's (navigable) card.
-  const featureVariations = useMemo<FeatureVariationsData | null>(() => {
+  const featureVariations = useMemo<Omit<FeatureVariationsData, 'outline' | 'coords'> | null>(() => {
     if (!variations) return null
     const groups = rvrnSubstitutionGroups(loaded.font, loaded.sfnt, variations.axes)
     if (groups.length === 0) return null
@@ -177,11 +182,34 @@ function Loaded({
       onApply: setCoords,
     }
   }, [loaded, variations])
+  // Inject the live outline font + coords without rebuilding the heavy rvrn groups
+  // on every slider move (shallow object only).
+  const featureVariationsValue = useMemo<FeatureVariationsData | null>(
+    () => (featureVariations ? { ...featureVariations, outline: outlineFont, coords } : null),
+    [featureVariations, outlineFont, coords],
+  )
   // Keep the shared HarfBuzz font at the current coordinates so lazily-computed
   // shape diffs (e.g. expanding an affected-glyph grid) stay coordinate-accurate.
   useEffect(() => {
     shaper?.setVariations(coords)
   }, [shaper, coords])
+
+  // Outline font for the contour cells. Loaded for every font (the composite-NaN
+  // fix isn't VF-specific); kept at the current coords as a backstop for tiles that
+  // mount lazily without a parent re-render (the sections also set it before render).
+  useEffect(() => {
+    let cancelled = false
+    setOutlineFont(undefined)
+    loadOutlineFont(loaded.sfnt)
+      .then((f) => !cancelled && setOutlineFont(f))
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [loaded])
+  useEffect(() => {
+    outlineFont?.setVariations(coords)
+  }, [outlineFont, coords])
 
   useEffect(() => {
     let cancelled = false
@@ -246,14 +274,22 @@ function Loaded({
         shaper={shaper}
         onOpenMarkExplorer={hasMarkInventory(markInventory) ? setMarkExplorer : undefined}
       />
-      <CombinationMatrix font={loaded.font} groups={combinations} shaper={shaper} size={size} />
-      <OrphanGlyphs font={loaded.font} gids={orphans} size={size} />
+      <CombinationMatrix
+        font={loaded.font}
+        groups={combinations}
+        shaper={shaper}
+        size={size}
+        outline={outlineFont}
+        coords={coords}
+        hasFeatureVariations={!!featureVariations}
+      />
+      <OrphanGlyphs font={loaded.font} gids={orphans} size={size} outline={outlineFont} coords={coords} />
     </div>
   )
 
   return (
     <VariationSettingsContext.Provider value={varSettings}>
-      <FeatureVariationsContext.Provider value={featureVariations}>
+      <FeatureVariationsContext.Provider value={featureVariationsValue}>
       {railMode ? (
         <div className="flex items-start gap-6">
           {column}

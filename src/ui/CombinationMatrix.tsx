@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Font } from 'opentype.js'
 import type { CombinationGroup, FeatureToggle } from '../core/combinations'
-import type { Shaper } from '../core/shape'
+import type { Shaper, OutlineFont } from '../core/shape'
 import { buildFormMatrix, type FormMatrix } from '../core/matrix'
 import { GlyphOutline } from './GlyphOutline'
 
@@ -35,16 +35,32 @@ export function CombinationMatrix({
   groups,
   shaper,
   size = 30,
+  outline,
+  coords,
+  hasFeatureVariations = false,
 }: {
   font: Font
   groups: CombinationGroup[]
   shaper?: Shaper
   size?: number
+  outline?: OutlineFont
+  coords?: Record<string, number>
+  hasFeatureVariations?: boolean
 }) {
   const [showAll, setShowAll] = useState(false)
+  // Aim the shared HB outline font at the current coords before the tiles render.
+  if (outline && coords) outline.setVariations(coords)
+
+  // Output gids are coordinate-INVARIANT unless the font has rvrn/FeatureVariations
+  // (which substitutes glyphs by coordinate, not a toggle). For rvrn fonts re-shape
+  // at the current coords so the matrix is honest when the user applies a triggering
+  // instance; otherwise enumerate once (gids don't move with the axes — only the
+  // outlines do, handled per-tile below).
+  const shapeKey = hasFeatureVariations ? coords : undefined
 
   const items = useMemo<Item[]>(() => {
     if (!shaper) return []
+    if (hasFeatureVariations && coords) shaper.setVariations(coords)
     const seen = new Set<string>()
     const out: Item[] = []
     for (const g of groups) {
@@ -66,7 +82,8 @@ export function CombinationMatrix({
       }
     }
     return out
-  }, [groups, shaper])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, shaper, shapeKey])
 
   if (!shaper || items.length === 0) return null
 
@@ -91,7 +108,7 @@ export function CombinationMatrix({
       </div>
       <div className="divide-y divide-neutral-200 overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 dark:divide-neutral-800 dark:border-neutral-800 dark:bg-neutral-950/50">
         {shown.map((it) => (
-          <GlyphRow key={it.frag} font={font} item={it} size={glyphSize} />
+          <GlyphRow key={it.frag} font={font} item={it} size={glyphSize} outline={outline} coords={coords} />
         ))}
       </div>
       {items.length > INITIAL && (
@@ -106,7 +123,19 @@ export function CombinationMatrix({
   )
 }
 
-function GlyphRow({ font, item, size }: { font: Font; item: Item; size: number }) {
+function GlyphRow({
+  font,
+  item,
+  size,
+  outline,
+  coords,
+}: {
+  font: Font
+  item: Item
+  size: number
+  outline?: OutlineFont
+  coords?: Record<string, number>
+}) {
   const ref = useRef<HTMLDivElement>(null)
   const [visible, setVisible] = useState(false)
   const { matrix } = item
@@ -139,9 +168,9 @@ function GlyphRow({ font, item, size }: { font: Font; item: Item; size: number }
       </div>
       {visible ? (
         <div className="flex flex-wrap gap-3">
-          <FormTile font={font} gids={matrix.baseline} size={size} label="plain" />
+          <FormTile font={font} gids={matrix.baseline} size={size} label="plain" outline={outline} coords={coords} />
           {matrix.forms.map((form, i) => (
-            <FormTile key={i} font={font} gids={form.gids} size={size} combo={form.combo} />
+            <FormTile key={i} font={font} gids={form.gids} size={size} combo={form.combo} outline={outline} coords={coords} />
           ))}
         </div>
       ) : (
@@ -157,12 +186,16 @@ function FormTile({
   size,
   combo,
   label,
+  outline,
+  coords,
 }: {
   font: Font
   gids: number[]
   size: number
   combo?: FeatureToggle[]
   label?: string
+  outline?: OutlineFont
+  coords?: Record<string, number>
 }) {
   const isPlain = !!label
   return (
@@ -171,7 +204,7 @@ function FormTile({
         className="flex items-center justify-center rounded-md border border-neutral-200 bg-white px-2 py-1 dark:border-neutral-800 dark:bg-neutral-900"
         style={{ minWidth: size }}
       >
-        <GlyphRun font={font} gids={gids} size={size} muted={isPlain} />
+        <GlyphRun font={font} gids={gids} size={size} muted={isPlain} outline={outline} coords={coords} />
       </div>
       {isPlain ? (
         <div className="max-w-[10rem] text-center text-[10px] text-neutral-400 dark:text-neutral-600">{label}</div>
@@ -202,7 +235,21 @@ function FormTile({
  * size AND baseline as the single-feature cards' glyph cells. Same-height boxes, so a
  * multi-glyph run shares one baseline.
  */
-function GlyphRun({ font, gids, size, muted }: { font: Font; gids: number[]; size: number; muted?: boolean }) {
+function GlyphRun({
+  font,
+  gids,
+  size,
+  muted,
+  outline,
+  coords,
+}: {
+  font: Font
+  gids: number[]
+  size: number
+  muted?: boolean
+  outline?: OutlineFont
+  coords?: Record<string, number>
+}) {
   const color = muted ? 'text-neutral-400 dark:text-neutral-600' : 'text-neutral-900 dark:text-neutral-100'
   if (gids.length === 0)
     return (
@@ -213,7 +260,7 @@ function GlyphRun({ font, gids, size, muted }: { font: Font; gids: number[]; siz
   return (
     <span className="flex items-end gap-px">
       {gids.map((g, i) => (
-        <GlyphOutline key={i} font={font} gid={g} size={size} className={color} />
+        <GlyphOutline key={i} font={font} gid={g} size={size} outline={outline} coords={coords} className={color} />
       ))}
     </span>
   )
