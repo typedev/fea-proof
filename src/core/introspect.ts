@@ -1,6 +1,7 @@
 import type { Font } from 'opentype.js'
 import type { FeatureInfo, FeatureOccurrence } from './types'
 import { featureName, isDefaultOn, isIgnored } from './registry'
+import { readFeatureUiNames } from './featureNames'
 
 // Minimal structural views over opentype.js' parsed GSUB/GPOS tables.
 interface LangSys {
@@ -91,10 +92,12 @@ function readLayout(font: Font, tableName: 'gsub' | 'gpos'): Map<string, RawFeat
 }
 
 /** Analyze all GSUB/GPOS features of a font into a sorted, enriched list. */
-export function analyzeFeatures(font: Font): FeatureInfo[] {
+export function analyzeFeatures(font: Font, sfnt?: ArrayBuffer): FeatureInfo[] {
   const gsub = readLayout(font, 'gsub')
   const gpos = readLayout(font, 'gpos')
   const tags = new Set<string>([...gsub.keys(), ...gpos.keys()])
+  // Designer UI labels for ssXX/cvXX (from GSUB FeatureParams), if we have bytes.
+  const uiNames = sfnt ? readFeatureUiNames(font, sfnt) : new Map<string, string>()
 
   const result: FeatureInfo[] = []
   for (const tag of tags) {
@@ -111,6 +114,7 @@ export function analyzeFeatures(font: Font): FeatureInfo[] {
     result.push({
       tag,
       name: featureName(tag),
+      uiName: uiNames.get(tag),
       tables,
       defaultOn: isDefaultOn(tag),
       ignored: isIgnored(tag),

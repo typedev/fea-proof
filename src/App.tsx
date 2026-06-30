@@ -122,7 +122,7 @@ function Loaded({
   onToggleTheme: () => void
   railMode: boolean
 }) {
-  const features = useMemo(() => analyzeFeatures(loaded.font), [loaded])
+  const features = useMemo(() => analyzeFeatures(loaded.font, loaded.sfnt), [loaded])
   const orphans = useMemo(
     () => findOrphanGlyphs(loaded.font, buildReverseCmap(loaded.font), features).orphans,
     [loaded, features],

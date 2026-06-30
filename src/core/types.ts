@@ -39,6 +39,8 @@ export interface FeatureInfo {
   tag: string
   /** Human-readable name (registry + generated for ssXX/cvXX). */
   name: string
+  /** Designer-supplied label from GSUB FeatureParams (ssXX/cvXX), if present. */
+  uiName?: string
   /** Tables the feature appears in. */
   tables: LayoutTable[]
   /** Whether the shaper enables this feature by default. */

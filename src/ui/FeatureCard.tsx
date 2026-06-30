@@ -84,7 +84,9 @@ export function FeatureCard({
             {feature.tag}
           </code>
           <div className="min-w-0">
-            <div className="text-sm text-neutral-800 dark:text-neutral-200">{feature.name}</div>
+            <div className="text-sm text-neutral-800 dark:text-neutral-200">
+              {feature.uiName ?? feature.name}
+            </div>
             {(feature.scripts.length > 0 || feature.langs.length > 0) && (
               <div className="mt-0.5 text-xs text-neutral-500">
                 {feature.scripts.map((s) => SCRIPT_LABELS[s] ?? s).join(', ')}

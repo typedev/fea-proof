@@ -13,6 +13,10 @@ OpenType feature or UI area they affect.
 ## 2026-06-30
 
 ### Added
+- Stylistic sets and character variants now show the type designer's own name
+  (e.g. "Single-story 'a'") read from the font's GSUB feature parameters, in place
+  of the generic "Stylistic Set N" / "Character Variant N" label. Fonts without a
+  supplied name keep the generic label.
 - Fonts using avar2 (the `avar` table, version 2+ — many axes driven by an
   axis-to-axis mapping) are now detected on load and politely refused with an
   explanatory banner instead of being loaded. Browser preview rendering is
