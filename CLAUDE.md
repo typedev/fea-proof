@@ -35,16 +35,24 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
     marks/format/control). `features/ligature.ts` — `reconstructLigatures` (type-4
     component sequences).
   - `registry.ts` — feature tag → name, default-on set, ignored set (`kern`).
-  - `combinations.ts` — group base glyphs by the set of features that affect them
-    (for the combinations explorer).
-  - `interactions.ts` — `effectiveFeatures`: which toggled features actually change
-    the shaping in the current state (live dependency/conflict indication).
+  - `combinations.ts` — `findCombinations`: group base fragments (chars/sequences)
+    by the set of features that GENUINELY combine on them (shaping-verified), for the
+    combinations matrix.
+  - `matrix.ts` — `buildFormMatrix`: for one fragment, enumerate every DISTINCT
+    output form reachable by a subset of its features (shaped in LookupList order),
+    each labelled with the minimal combination producing it; keeps only forms that
+    are part of a real ≥2-feature combination.
+  - `interactions.ts` — `buildHbFeatures`: turn an active toggle set into the
+    HarfBuzz feature list (`tag=1`/`tag=0`) mirroring the CSS rendering (default-on
+    features are explicitly disabled when off). Used by the shaping passes.
   - `shape.ts` — lazy harfbuzzjs (wasm) wrapper: `loadShaper(sfnt)`, `shape()`,
     `changedRanges()` (character ranges whose shaping differs between two
     variants), `setVariations`; plus `loadOutlineFont(sfnt)` — an ISOLATED hb.Font
     exposing `glyphPath`/`glyphExtents` for VF-interpolated outlines (opentype.js
     can't interpolate gvar; kept separate so its axis state can't corrupt the
-    shared analysis font).
+    shared analysis font). Powers BOTH the mark explorer AND every outline cell via
+    `GlyphOutline` (combinations / unreachable / rvrn groups) — see the
+    "Outline cells render via HarfBuzz" gotcha.
   - `substitution.ts` — glyph substitution graph (type 1/3/4) + `resolveGlyph`
     (trace non-cmapped glyphs back to base chars + producer features).
   - `context.ts` — `deriveTriggers`: read contextual lookups (type 5/6, Format 3)
@@ -119,13 +127,17 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
   features, gated by `isFigureLikeFeature`), `AltGrid` (alternates),
   `FeatureVariationsGroups` (rvrn: base→variant glyph-outline pairs + condition
   ranges + "apply coordinates", rendered inside the feature card),
-  `ContextualExamples`, `CombinationExplorer`, `OrphanGlyphs` (unreachable),
-  `GlyphOutline` (render a glyph by gid from its outline; `fit` bbox mode for
-  marks/variants — shared by OrphanGlyphs, rvrn groups, mark explorer),
+  `ContextualExamples`, `CombinationMatrix` (one row per fragment whose features
+  genuinely combine → its distinct stacked forms, by output gid), `OrphanGlyphs`
+  (unreachable), `GlyphOutline` (render a glyph by gid from its outline; `fit` bbox
+  mode for marks/variants; optional `outline`+`coords` props render via HarfBuzz —
+  VF-accurate, no opentype composite-NaN — shared by CombinationMatrix, OrphanGlyphs,
+  rvrn groups, mark explorer),
   `MarkExplorer` (full-screen mark·mkmk explorer overlay), `ComposedGlyphs`
   (base + marks positioned by GPOS anchors in one SVG).
 - `src/App.tsx` — state + layout (incl. axis `coords`, the variable/rvrn/mark
-  contexts, and the mark-explorer overlay state).
+  contexts, the mark-explorer overlay state, and an isolated `outlineFont` —
+  `loadOutlineFont` kept at `coords` — fed to the outline cells).
 
 ## Conventions & hard-won gotchas
 
@@ -183,7 +195,7 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
   as `labels`, passed through to `Preview`. Non-cascade single features keep the
   default `default`/`feature on` labels. Generalizes to any producer set; if a
   glyph has multiple possible producers, `resolveGlyph` picks one path (use the
-  combinations explorer to see the full interaction space). Guiding rule: a
+  combinations matrix to see the full interaction space). Guiding rule: a
   "default" cell must show either the true font default or an explicitly-named
   producer context — never a silently pre-applied feature.
 - **Highlighting is a real HarfBuzz shaping diff** (`shape.ts` `changedRanges` →
@@ -220,7 +232,7 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
 - **Sticky nav scroll offset.** The feature navigator lives in the sticky
   `Controls` bar; it measures its own height (ResizeObserver) into the
   `--scroll-offset` CSS var. Every jump target (`FeatureCard`,
-  `CombinationExplorer`, `OrphanGlyphs`) sets `scroll-margin-top:
+  `CombinationMatrix`, `OrphanGlyphs`) sets `scroll-margin-top:
   var(--scroll-offset)` so a jumped-to heading lands just below the bar instead
   of hiding under it. Anchor ids: `featureAnchorId(feature)`,
   `feature-combinations`, `unreachable-glyphs`.
@@ -266,6 +278,31 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
   `GlyphOutline`'s `fit` mode renders a glyph at em-proportion from its bbox
   (marks have ~0 advance and would otherwise clip). Scrollbars are theme-colored
   app-wide in `src/index.css`.
+- **Outline cells render via HarfBuzz, not opentype.js.** Two sections draw glyphs
+  as outlines by gid because the glyphs have no codepoint to type as text:
+  combinations (output gids of shaping) and unreachable (no cmap). Every OTHER cell
+  is real CSS text (`font-feature-settings` + `font-variation-settings`), so the
+  browser shapes it and axis sliders Just Work. opentype.js — used by the outline
+  cells before — has two VF failures: it can't interpolate gvar (frozen at the
+  default master, sliders dead) and emits `NaN` path data for COMPOSITE glyphs at a
+  fractional baseline `y` (they vanished to their glyph name; bodoni's figures /
+  small-caps are composite, so the combinations matrix was full of them). Fix: pass
+  `GlyphOutline` an `outline` (the app's isolated `loadOutlineFont`) + `coords` — it
+  then takes the path from HarfBuzz (Y-UP → flip), which interpolates and has no NaN
+  bug. Each consuming SECTION calls `outline.setVariations(coords)` ONCE at the top
+  of its render (React renders parent-before-child, so the tiles read the right
+  coords); App also keeps the font at `coords` via an effect as a backstop for
+  lazily-mounted rows. New gid-outline UIs should follow this (don't reach for
+  opentype `getPath`).
+- **Combinations are coordinate-aware for rvrn.** rvrn/FeatureVariations substitutes
+  by COORDINATE, not a `font-feature-settings` toggle, so it's a no-op toggle and
+  correctly drops out of the matrix's toggle enumeration — do NOT add a fake rvrn
+  column. Instead, when the font has FeatureVariations, the `items` memo re-shapes
+  gids at the current `coords` (and depends on them), so a substitution that only
+  fires inside an axis range appears once that range is entered (e.g. a feature
+  card's "apply coordinates"). Fonts without FeatureVariations keep the single
+  up-front enumeration (gids are coord-invariant — only the OUTLINES follow the
+  sliders, per the gotcha above).
 
 ## Changelog
 
@@ -332,4 +369,9 @@ relative-base deploy; figure-feature isolation + honest cascade labels (swept al
 **variable fonts** (axis sliders + named instances + `font-variation-settings`
 everywhere); **rvrn / FeatureVariations** (conditional substitutions in the
 feature card, with "apply coordinates"); **mark·mkmk explorer** (anchor-based
-composition + validity gating + variable-font-accurate outlines & anchors).
+composition + validity gating + variable-font-accurate outlines & anchors);
+**feature combinations matrix** (auto-surfaced genuine combinations, output-gid
+forms labelled with the minimal producing set); **HarfBuzz outline cells**
+(combinations / unreachable / rvrn groups render glyphs via `loadOutlineFont` —
+VF-accurate, fixes opentype.js's composite-glyph NaN; combinations re-shape at the
+current coordinate so rvrn participates).

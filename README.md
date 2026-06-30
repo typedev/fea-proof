@@ -42,10 +42,14 @@ machine.
   is labelled as such instead of faked.
 - **Full glyph inventory** — for features that touch many glyphs (small caps over
   whole alphabets), a "Show all N affected glyphs" grid grouped by script.
-- **Feature combinations** — base glyphs touched by several features get
-  interactive toggles so you can stack them and see how they combine (applied in
-  the font's correct LookupList order). Chips with no effect in the current
-  combination are dimmed, revealing dependencies and conflicts (HarfBuzz-checked).
+- **Feature combinations** — automatically surfaces the glyphs (and ligature /
+  contextual sequences) whose features *genuinely* combine: each one lists every
+  distinct stacked form — features applied in the font's correct LookupList order,
+  shaped by HarfBuzz — labelled with the minimal feature combination that produces
+  it. Click any tag to jump to that feature's card. Forms reachable by a single
+  feature alone are left to that feature's own card. On variable fonts the forms
+  follow the axis sliders, and conditional (`rvrn`) substitutions appear once the
+  design coordinate enters their range.
 - **Alternates** (`aalt`, `salt`) — a grid of every glyph's alternate forms.
 - **Variable fonts** — `fvar` axes get sliders and a named-instance picker in the
   top bar; every proof re-renders live at the chosen point in design space
@@ -112,9 +116,12 @@ copy `deploy.config.example` → `deploy.config` and set your target.
   inverted cmap, then real words containing those characters are chosen from
   bundled frequency wordlists (lazy-loaded per script).
 - **Analysis:** [HarfBuzz](https://github.com/harfbuzz/harfbuzzjs) (wasm, lazy
-  loaded) is used as an analysis engine — not a renderer — to diff shaping
-  before/after a feature (exact changed glyphs to highlight) and to confirm
-  contextual triggers. Variable-font coordinates are applied to the shaper too.
+  loaded) is the analysis engine — it diffs shaping before/after a feature (exact
+  changed glyphs to highlight) and confirms contextual triggers. Variable-font
+  coordinates are applied to it too. It also supplies glyph **outlines** for the few
+  cells that draw glyphs by id rather than as text (combinations, unreachable, mark
+  explorer) — those glyphs have no codepoint to type, and HarfBuzz interpolates the
+  outline at the current axes (opentype.js only draws the default master).
 - **Variable & low-level tables:** `fvar`/`avar`/GDEF are read via opentype.js;
   the parts it doesn't expose — fvar hidden-axis flags, GSUB `FeatureVariations`
   (`rvrn`), and GPOS mark/mkmk anchors — are parsed directly from the font bytes.
