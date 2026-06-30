@@ -1,11 +1,38 @@
 import { parse, type Font } from 'opentype.js'
 import { decompressWoff2 } from './woff2'
 import type { LoadedFont } from './types'
-import { readVariations } from './variations'
+import { readVariations, findTable } from './variations'
 
 const WOFF2_SIGNATURE = 0x774f4632 // 'wOF2'
 
 let familyCounter = 0
+
+/**
+ * True if the font carries an `avar` table of version 2+ (avar2). avar2 remaps
+ * coordinates across axes via a VarStore, typically driving dozens of parametric
+ * axes from a few designer axes. Detected from raw sfnt bytes — the first uint16
+ * of the `avar` table is its majorVersion.
+ *
+ * TODO(avar2): support is DEFERRED. HarfBuzz (our shaper/outline engine) handles
+ * avar2 fine, but (a) browser FontFace rendering — which every CSS preview relies
+ * on — is unreliable for avar2 (wrong design instance on engines without avar2,
+ * and a renderer crash observed in testing), and (b) our coordinate math
+ * (`coords.ts`) reads only avar1 segment maps, ignoring the avar2 VarStore. Rather
+ * than the large change of rendering every preview via HarfBuzz outlines, the plan
+ * is: build a SEPARATE throwaway app to experiment with avar2 fonts (HB-rendered
+ * previews, avar2 coordinate resolution via the existing `parseItemVariationStore`,
+ * a many-axes UI driven by STAT), and once it works, port that code back here. For
+ * now we refuse such fonts up front so the app never crashes on one.
+ */
+function usesAvar2(sfnt: ArrayBuffer): boolean {
+  const off = findTable(sfnt, 'avar')
+  if (off == null) return false
+  try {
+    return new DataView(sfnt).getUint16(off) >= 2
+  } catch {
+    return false
+  }
+}
 
 /**
  * opentype.js v2 exposes names under platform sub-objects (windows/macintosh/unicode),
@@ -65,6 +92,17 @@ export async function loadFont(file: File): Promise<LoadedFont> {
 
   // sfnt buffer for opentype.js (decompressed if woff2)
   const sfnt = isWoff2 ? toArrayBuffer(await decompressWoff2(new Uint8Array(original))) : original
+
+  // avar2 fonts are refused BEFORE opentype.parse / FontFace (both can choke on
+  // them) — see usesAvar2's TODO. Detection is a cheap raw-byte read, so it's safe.
+  if (usesAvar2(sfnt)) {
+    throw new Error(
+      "This font uses avar2 — a complex variable-font model (many axes driven by an " +
+        "axis-to-axis mapping). Browser preview rendering is unreliable for avar2 and " +
+        "could destabilize the page, so the font wasn't loaded. avar2 support is " +
+        "planned separately.",
+    )
+  }
 
   let font: Font
   try {

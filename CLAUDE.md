@@ -350,6 +350,16 @@ up source edits, or the probe runs stale code.
 
 ## Deferred (future)
 
+- **avar2 (avar table v2+).** Currently REFUSED at load (`load.ts` `usesAvar2` →
+  friendly error banner) so the app never crashes on one — browser FontFace
+  rendering, which every CSS preview relies on, is unreliable for avar2 (wrong design
+  instance on engines lacking avar2; a renderer crash observed in testing), and
+  `coords.ts` reads only avar1 segment maps (ignores the avar2 VarStore). HarfBuzz
+  (our shaper/outline engine, 14.x) DOES handle avar2. Plan: build a SEPARATE
+  throwaway app to experiment — previews rendered via HarfBuzz outlines (not CSS),
+  avar2 coordinate resolution reusing `parseItemVariationStore`
+  (`itemVariationStore.ts`), and a many-axes UI prioritized by STAT — then port the
+  working pieces back here and lift the refusal.
 - rvrn follow-ups: general conditional-features / axis-space explorer; ConditionTable
   formats 2/3; avar2 / dozens-of-axes register UI.
 - Mark explorer follow-ups: >2 mixed above/below stacks (the "previous mark" host
