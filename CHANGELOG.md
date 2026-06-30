@@ -10,14 +10,14 @@ OpenType feature or UI area they affect.
 
 ## [Unreleased]
 
+## 2026-06-30
+
 ### Added
 - Fonts using avar2 (the `avar` table, version 2+ — many axes driven by an
   axis-to-axis mapping) are now detected on load and politely refused with an
   explanatory banner instead of being loaded. Browser preview rendering is
   unreliable for avar2 and could destabilize the page; full avar2 support is planned
   separately.
-
-## 2026-06-30
 
 ### Fixed
 - The glyph-outline cells (Feature combinations and Unreachable glyphs) now render
