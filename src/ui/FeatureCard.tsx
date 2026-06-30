@@ -125,17 +125,44 @@ export function FeatureCard({
         </div>
       ) : (
         <div className="mt-3 space-y-3">
-          {sample.seeCombinations && sample.note && (
-            <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-400">
-              {sample.note}{' '}
-              <button
-                onClick={() =>
-                  document.getElementById('feature-combinations')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                }
-                className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
-              >
-                Jump →
-              </button>
+          {sample.seeCombinations && (
+            <div className="space-y-2">
+              {sample.note && (
+                <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-400">
+                  {sample.note}{' '}
+                  <button
+                    onClick={() =>
+                      document.getElementById('feature-combinations')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }
+                    className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                  >
+                    Jump →
+                  </button>
+                </div>
+              )}
+              {/* Restyled glyphs (the producer's ligatures) shown as default→feature
+                  pairs — a few inline, the rest behind "Show all". */}
+              {sample.affected.length > 0 && (
+                <>
+                  <AffectedGlyphs
+                    cssFamily={cssFamily}
+                    tag={feature.tag}
+                    defaultOn={feature.defaultOn}
+                    affected={showAll ? sample.affected : sample.affected.slice(0, GLYPH_INVENTORY_THRESHOLD)}
+                    size={size}
+                    shaper={shaper}
+                    spotlight={false}
+                  />
+                  {sample.affected.length > GLYPH_INVENTORY_THRESHOLD && (
+                    <button
+                      onClick={() => setShowAll((v) => !v)}
+                      className="text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+                    >
+                      {showAll ? 'Show fewer' : `Show all ${sample.affected.length} restyled glyphs`}
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           )}
           {sample.text && (

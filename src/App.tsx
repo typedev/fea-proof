@@ -15,7 +15,6 @@ import { VariationSettingsContext } from './render/variationContext'
 import { DropZone } from './ui/DropZone'
 import { Header } from './ui/Header'
 import { FeatureList } from './ui/FeatureList'
-import { CombinationExplorer } from './ui/CombinationExplorer'
 import { Controls } from './ui/Controls'
 import { rvrnSubstitutionGroups } from './core/featureVariations'
 import { readAvarSegments, inConditionCoords } from './core/coords'
@@ -149,7 +148,6 @@ function Loaded({
     [loaded],
   )
   const [markExplorer, setMarkExplorer] = useState<FeatureInfo | null>(null)
-  const [matrixOpen, setMatrixOpen] = useState(false)
 
   // GSUB FeatureVariations (rvrn): grouped substitutions, keyed by the feature
   // tag they substitute, so each renders inside that feature's (navigable) card.
@@ -248,13 +246,7 @@ function Loaded({
         shaper={shaper}
         onOpenMarkExplorer={hasMarkInventory(markInventory) ? setMarkExplorer : undefined}
       />
-      <CombinationExplorer
-        groups={combinations}
-        cssFamily={loaded.cssFamily}
-        size={Math.max(size, 36)}
-        shaper={shaper}
-        onOpenMatrix={shaper ? () => setMatrixOpen(true) : undefined}
-      />
+      <CombinationMatrix font={loaded.font} groups={combinations} shaper={shaper} size={size} />
       <OrphanGlyphs font={loaded.font} gids={orphans} size={size} />
     </div>
   )
@@ -279,14 +271,6 @@ function Loaded({
           variations={variations}
           coords={coords}
           onClose={() => setMarkExplorer(null)}
-        />
-      )}
-      {matrixOpen && shaper && (
-        <CombinationMatrix
-          font={loaded.font}
-          groups={combinations}
-          shaper={shaper}
-          onClose={() => setMatrixOpen(false)}
         />
       )}
       </FeatureVariationsContext.Provider>

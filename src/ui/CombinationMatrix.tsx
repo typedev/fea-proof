@@ -1,164 +1,148 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Font } from 'opentype.js'
 import type { CombinationGroup, FeatureToggle } from '../core/combinations'
 import type { Shaper } from '../core/shape'
 import { buildFormMatrix, type FormMatrix } from '../core/matrix'
+import { GlyphOutline } from './GlyphOutline'
+
+/** Scroll the page to a feature's card by tag (matches any GSUB/GPOS card id). */
+function scrollToFeature(tag: string) {
+  document.querySelector(`[id^="feat-${tag}-"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 
 interface Item {
   frag: string
   features: FeatureToggle[]
+  matrix: FormMatrix
 }
 
+/** Rows shown before the "Show all" expander (like the other inventory cards). */
+const INITIAL = 12
+
 /**
- * Fullscreen explorer: one row per base fragment (a glyph, or a ligature/contextual
- * sequence), showing every distinct form it reaches across combinations of the
- * features affecting it, each rendered by output gid (so feature-produced/non-cmapped
- * forms show too) and labelled with the minimal combination that produces it. Glyphs
- * are baseline-aligned. Rows compute lazily as they scroll into view.
+ * Inline section: one row per base fragment (a glyph, or a ligature/contextual
+ * sequence) whose features GENUINELY COMBINE, showing each distinct combined form
+ * (rendered by output gid, so feature-produced/non-cmapped forms show too) labelled
+ * with the minimal combination that produces it. Fragments with no real combination
+ * — parallel single-feature alternates only — are dropped (`buildFormMatrix` returns
+ * no forms; they live on each feature's own card). The full matrices are cheap to
+ * compute up front (~0.1 ms each), so they're built eagerly to filter empty rows and
+ * keep an honest count; row CONTENT mounts lazily on scroll. A "Show all" button
+ * reveals the rest — mirrors the single-feature cards.
  */
 export function CombinationMatrix({
   font,
   groups,
   shaper,
-  onClose,
+  size = 30,
 }: {
   font: Font
   groups: CombinationGroup[]
-  shaper: Shaper
-  onClose: () => void
+  shaper?: Shaper
+  size?: number
 }) {
-  const [glyphSize, setGlyphSize] = useState(36)
+  const [showAll, setShowAll] = useState(false)
 
   const items = useMemo<Item[]>(() => {
+    if (!shaper) return []
     const seen = new Set<string>()
     const out: Item[] = []
     for (const g of groups) {
       for (const frag of g.chars) {
         if (seen.has(frag)) continue
         seen.add(frag)
-        // A multi-glyph fragment is only meaningful here if it can LIGATE — drop
-        // sequences that never change glyph count (long-string artifacts whose only
-        // forms are per-component restyles). Cheap 2-shape probe (full matrix stays
-        // lazy). Single glyphs always kept.
-        if ([...frag].length > 1) {
-          try {
-            const base = shaper.shape(frag, { features: [] }).length
-            const allOn = shaper.shape(frag, { features: g.features.map((f) => `${f.tag}=1`) }).length
-            if (allOn >= base) continue
-          } catch {
-            continue
-          }
+        // Build the (filtered) form matrix now — it's cheap, and lets us drop
+        // fragments whose features don't genuinely combine (no forms left) plus any
+        // non-ligating multi-glyph artifact (its per-component restyles aren't
+        // coherent, so no forms either). Surviving rows are real combinations.
+        let matrix: FormMatrix
+        try {
+          matrix = buildFormMatrix(shaper, frag, g.features)
+        } catch {
+          continue
         }
-        out.push({ frag, features: g.features })
+        if (matrix.forms.length === 0) continue
+        out.push({ frag, features: g.features, matrix })
       }
     }
     return out
   }, [groups, shaper])
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    document.addEventListener('keydown', onKey)
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prev
-    }
-  }, [onClose])
+  if (!shaper || items.length === 0) return null
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 p-4 backdrop-blur-sm"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+  const shown = showAll ? items : items.slice(0, INITIAL)
+  const glyphSize = Math.min(size, 30)
+
+  return (
+    <section
+      id="feature-combinations"
+      style={{ scrollMarginTop: 'var(--scroll-offset, 1rem)' }}
+      className="space-y-2"
     >
-      <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
-          <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">
-              Feature combinations matrix · {items.length}
-            </h2>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              Every distinct form a glyph reaches, labelled with the minimal feature combination that produces it.
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-3">
-            <label className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
-              Size
-              <input
-                type="range"
-                min={20}
-                max={72}
-                value={glyphSize}
-                onChange={(e) => setGlyphSize(Number(e.target.value))}
-                className="accent-indigo-500"
-              />
-            </label>
-            <button
-              onClick={onClose}
-              title="Close (Esc)"
-              className="rounded-lg px-2 py-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-
-        {/* One row per glyph (computed lazily on scroll) */}
-        <div className="min-h-0 flex-1 divide-y divide-neutral-200 overflow-y-auto dark:divide-neutral-800">
-          {items.map((it) => (
-            <GlyphRow key={it.frag} font={font} item={it} shaper={shaper} size={glyphSize} />
-          ))}
-          {items.length === 0 && (
-            <div className="px-4 py-8 text-sm text-neutral-400 dark:text-neutral-600">No combinable glyphs.</div>
-          )}
-        </div>
+      <div className="px-1">
+        <h2 className="text-lg font-semibold">
+          Feature combinations <span className="font-normal text-neutral-400">· {items.length}</span>
+        </h2>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">
+          Glyphs whose features genuinely combine — each distinct stacked form (features applied in the
+          font's LookupList order) labelled with the minimal combination that produces it. Click a tag
+          to jump to that feature.
+        </p>
       </div>
-    </div>,
-    document.body,
+      <div className="divide-y divide-neutral-200 overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 dark:divide-neutral-800 dark:border-neutral-800 dark:bg-neutral-950/50">
+        {shown.map((it) => (
+          <GlyphRow key={it.frag} font={font} item={it} size={glyphSize} />
+        ))}
+      </div>
+      {items.length > INITIAL && (
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className="text-sm text-indigo-600 hover:underline dark:text-indigo-400"
+        >
+          {showAll ? 'Show fewer' : `Show all ${items.length} combinations`}
+        </button>
+      )}
+    </section>
   )
 }
 
-function GlyphRow({ font, item, shaper, size }: { font: Font; item: Item; shaper: Shaper; size: number }) {
+function GlyphRow({ font, item, size }: { font: Font; item: Item; size: number }) {
   const ref = useRef<HTMLDivElement>(null)
-  const [matrix, setMatrix] = useState<FormMatrix | null>(null)
+  const [visible, setVisible] = useState(false)
+  const { matrix } = item
 
-  // Compute this row's matrix only once it nears the viewport.
+  // The matrix is precomputed; only DEFER mounting this row's (SVG-heavy) content
+  // until it nears the viewport, so "Show all" doesn't render everything at once.
   useEffect(() => {
-    setMatrix(null)
     const el = ref.current
     if (!el) return
     const io = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {
           io.disconnect()
-          setMatrix(buildFormMatrix(shaper, item.frag, item.features))
+          setVisible(true)
         }
       },
       { rootMargin: '300px' },
     )
     io.observe(el)
     return () => io.disconnect()
-  }, [item.frag, item.features, shaper])
+  }, [])
 
   return (
     <div ref={ref} className="flex items-start gap-3 px-4 py-3" style={{ minHeight: size * 1.7 }}>
       <div
-        className="w-10 shrink-0 pt-2 font-mono text-xs text-neutral-400 dark:text-neutral-500"
+        className="w-20 shrink-0 break-all pt-1.5 font-mono text-lg font-medium text-neutral-700 dark:text-neutral-200"
         title={item.features.map((f) => f.tag).join(', ')}
       >
         {item.frag}
       </div>
-      {matrix ? (
+      {visible ? (
         <div className="flex flex-wrap gap-3">
           <FormTile font={font} gids={matrix.baseline} size={size} label="plain" />
           {matrix.forms.map((form, i) => (
             <FormTile key={i} font={font} gids={form.gids} size={size} combo={form.combo} />
           ))}
-          {matrix.forms.length === 0 && (
-            <span className="pt-2 text-xs text-neutral-400 dark:text-neutral-600">no distinct forms</span>
-          )}
         </div>
       ) : (
         <div className="pt-2 text-xs text-neutral-300 dark:text-neutral-700">…</div>
@@ -180,72 +164,57 @@ function FormTile({
   combo?: FeatureToggle[]
   label?: string
 }) {
-  const caption = label ?? combo?.map((f) => f.tag).join(' + ') ?? ''
+  const isPlain = !!label
   return (
     <div className="flex flex-col items-center gap-1">
       <div
-        className="flex items-end justify-center rounded-md border border-neutral-200 bg-white px-2 text-neutral-900 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-100"
-        style={{ minHeight: size * 1.2, minWidth: size * 0.8 }}
+        className="flex items-center justify-center rounded-md border border-neutral-200 bg-white px-2 py-1 dark:border-neutral-800 dark:bg-neutral-900"
+        style={{ minWidth: size }}
       >
-        <GlyphRun font={font} gids={gids} size={size} />
+        <GlyphRun font={font} gids={gids} size={size} muted={isPlain} />
       </div>
-      <div
-        className={`max-w-[10rem] text-center text-[10px] ${
-          label ? 'text-neutral-400 dark:text-neutral-600' : 'font-mono text-indigo-600 dark:text-indigo-400'
-        }`}
-      >
-        {caption}
-      </div>
+      {isPlain ? (
+        <div className="max-w-[10rem] text-center text-[10px] text-neutral-400 dark:text-neutral-600">{label}</div>
+      ) : (
+        <div className="max-w-[10rem] text-center font-mono text-[10px] text-indigo-600 dark:text-indigo-400">
+          {combo?.map((f, i) => (
+            <span key={f.tag}>
+              {i > 0 && <span className="text-neutral-400 dark:text-neutral-600"> + </span>}
+              <button
+                type="button"
+                onClick={() => scrollToFeature(f.tag)}
+                title={`Jump to ${f.name}`}
+                className="hover:underline"
+              >
+                {f.tag}
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
-/** A run of output gids rendered by outline, all sharing one baseline. */
-function GlyphRun({ font, gids, size }: { font: Font; gids: number[]; size: number }): ReactNode {
-  if (gids.length === 0) return <span className="text-neutral-300 dark:text-neutral-700">·</span>
-  return (
-    <span className="flex items-start">
-      {gids.map((g, i) => (
-        <BaselineGlyph key={i} font={font} gid={g} size={size} />
-      ))}
-    </span>
-  )
-}
-
 /**
- * Render a glyph by id in EM units with a baseline-anchored viewBox: every glyph
- * shares the same vertical range (ascender→descender, baseline at y=0), so figure
- * forms keep their real height/position and all glyphs sit on one baseline. Em-unit
- * coordinates also avoid opentype's small-scale `toPathData` rounding glitches.
+ * A run of output gids rendered by the shared GlyphOutline (default mode), which
+ * positions each glyph exactly like text at `font-size: size; line-height: 1.5` — same
+ * size AND baseline as the single-feature cards' glyph cells. Same-height boxes, so a
+ * multi-glyph run shares one baseline.
  */
-function BaselineGlyph({ font, gid, size }: { font: Font; gid: number; size: number }) {
-  const glyph = font.glyphs.get(gid)
-  const upm = font.unitsPerEm || 1000
-  const ascent = font.ascender || upm * 0.8
-  const descent = font.descender || -upm * 0.2 // negative
-  let d = ''
-  try {
-    d = glyph?.getPath(0, 0, upm).toPathData(1) ?? ''
-  } catch {
-    d = ''
-  }
-  if (!d || d.includes('NaN')) {
+function GlyphRun({ font, gids, size, muted }: { font: Font; gids: number[]; size: number; muted?: boolean }) {
+  const color = muted ? 'text-neutral-400 dark:text-neutral-600' : 'text-neutral-900 dark:text-neutral-100'
+  if (gids.length === 0)
     return (
-      <span style={{ height: size }} className="flex items-center px-0.5 text-[9px] text-neutral-400 dark:text-neutral-600">
-        {glyph?.name ?? '·'}
+      <span className="flex items-center text-neutral-300 dark:text-neutral-700" style={{ height: size * 1.5 }}>
+        ·
       </span>
     )
-  }
-  const adv = glyph?.advanceWidth || upm
-  const vbH = ascent - descent
   return (
-    <svg
-      viewBox={`0 ${-ascent} ${adv} ${vbH}`}
-      height={(size * vbH) / upm}
-      width={(size * adv) / upm}
-      className="overflow-visible"
-    >
-      <path d={d} className="fill-current" />
-    </svg>
+    <span className="flex items-end gap-px">
+      {gids.map((g, i) => (
+        <GlyphOutline key={i} font={font} gid={g} size={size} className={color} />
+      ))}
+    </span>
   )
 }

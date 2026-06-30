@@ -25,7 +25,7 @@ export function GlyphOutline({
   const glyph = font.glyphs.get(gid)
   const upm = font.unitsPerEm || 1000
   const nameFallback = (
-    <span style={{ height: size * 1.15 }} className="flex items-center text-[10px] text-neutral-400 dark:text-neutral-600">
+    <span style={{ height: size * 1.5 }} className="flex items-center text-[10px] text-neutral-400 dark:text-neutral-600">
       {glyph?.name ?? '·'}
     </span>
   )
@@ -64,10 +64,17 @@ export function GlyphOutline({
     )
   }
 
-  const baseline = size * 0.82
-  const height = size * 1.15
-  const scale = size / upm
-  const adv = (glyph?.advanceWidth ?? upm) * scale
+  // Non-fit: position the glyph as a browser lays out text at `font-size: size;
+  // line-height: 1.5` — baseline from the font's own ascender/descender via the
+  // standard half-leading split, and the SVG IS that line box. So an outline glyph
+  // drops into a cell at the same size AND baseline as a text glyph, matching the
+  // single-feature cards (AffectedGlyphs). (`fit` mode above stays bbox-tight for
+  // marks/variants that have ~0 advance.)
+  const ascPx = ((font.ascender || upm * 0.8) / upm) * size
+  const descPx = (-(font.descender || -upm * 0.2) / upm) * size // positive
+  const lineBox = size * 1.5
+  const baseline = (lineBox - (ascPx + descPx)) / 2 + ascPx
+  const adv = ((glyph?.advanceWidth ?? upm) / upm) * size
   let d = ''
   try {
     d = glyph?.getPath(0, baseline, size).toPathData(2) ?? ''
@@ -77,7 +84,7 @@ export function GlyphOutline({
   if (d.includes('NaN')) d = ''
   if (!d) return nameFallback
   return (
-    <svg width={Math.max(adv, size * 0.4)} height={height} className={`overflow-visible ${className ?? ''}`}>
+    <svg width={Math.max(adv, size * 0.4)} height={lineBox} className={`overflow-visible ${className ?? ''}`}>
       <path d={d} className="fill-current" />
     </svg>
   )

@@ -334,19 +334,28 @@ function cascadeProducers(
 /**
  * Card content for a feature that only acts in combination (all inputs are produced
  * by other features): a pointer to the Feature Combinations explorer, naming the
- * producer feature(s). The card shows no synthesised cross-feature proof.
+ * producer feature(s). No synthesised cross-feature word proof — but when the
+ * producer-output glyphs it restyles are themselves addressable (PUA-cmapped, the
+ * common case for stylistic-set ligature variants), pass them as `affected` so the
+ * card still shows the real default→feature inventory (the ligatures) alongside the
+ * pointer.
  */
-function combinationPointer(tag: string, producers: string[], examples: ContextualExample[]): FeatureSample {
+function combinationPointer(
+  tag: string,
+  producers: string[],
+  examples: ContextualExample[],
+  affected: string[] = [],
+): FeatureSample {
   return {
     tag,
     kind: 'single',
     text: '',
     usedCoverage: false,
-    affected: [],
+    affected,
     seeCombinations: true,
     note:
       producers.length > 0
-        ? `Only restyles glyphs that ${producers.join(', ')} produce — explore it in Feature Combinations.`
+        ? `Restyles glyphs that ${producers.join(', ')} produce — see the full stack in Feature Combinations.`
         : 'Only acts in combination with other features — explore it in Feature Combinations.',
     examples: examples.length > 0 ? examples : undefined,
   }
@@ -589,20 +598,20 @@ export async function prepareSamples(
       }
     }
     if (!handled && types.includes(1)) {
-      // All inputs produced by another feature → no standalone effect; point to
-      // Feature Combinations rather than fabricating a cross-feature proof.
       const producers = cascadeProducers(font, feature, reverse, graph)
+      const chars = affectedInputChars(font, feature, reverse)
       if (producers) {
-        result.set(feature.tag, combinationPointer(feature.tag, producers, examples))
+        // All inputs produced by another feature → no standalone WORD proof. Point to
+        // Feature Combinations for the full stack, and (when its restyled glyphs are
+        // addressable, i.e. PUA-cmapped) still show the real default→feature inventory
+        // so the ligatures are visible on the card, not hidden behind a link.
+        result.set(feature.tag, combinationPointer(feature.tag, producers, examples, chars))
         handled = true
-      } else {
-        const chars = affectedInputChars(font, feature, reverse)
-        if (chars.length > 0) {
-          const { before, after } = beforeAfterFeatures(feature.tag, feature.defaultOn)
-          pending.push({ tag: feature.tag, kind: 'single', chars, affected: chars, before, after, examples })
-          noteScripts(chars)
-          handled = true
-        }
+      } else if (chars.length > 0) {
+        const { before, after } = beforeAfterFeatures(feature.tag, feature.defaultOn)
+        pending.push({ tag: feature.tag, kind: 'single', chars, affected: chars, before, after, examples })
+        noteScripts(chars)
+        handled = true
       }
     }
     if (!handled && types.some((t) => t === 5 || t === 6)) {

@@ -10,13 +10,39 @@ OpenType feature or UI area they affect.
 
 ## [Unreleased]
 
+## 2026-06-29
+
 ### Added
-- Feature Combinations **matrix** — a fullscreen explorer (open from the Feature
-  Combinations section) that, for a chosen glyph, enumerates every combination of the
-  features affecting it and shows each DISTINCT reachable form as a glyph, labelled
-  with the minimal combination that produces it. Surfaces multi-feature forms manual
-  toggling would miss (e.g. `onum + tnum`, or a stylistic set restyling a
-  numerator/superscript figure).
+- Feature Combinations is now an inline section that auto-surfaces only the glyphs
+  whose features GENUINELY combine: for each such glyph or ligature it lists every
+  distinct stacked form (features applied in the font's LookupList order) as a glyph,
+  labelled with the minimal feature combination that produces it. Click a feature tag
+  to jump to its card; a "Show all" button reveals the rest. Forms that are merely
+  parallel single-feature alternates are omitted — they already appear on each
+  feature's own card. Replaces the earlier toggle-chip explorer.
+- The feature navigator moves into a right-hand side rail on short-height viewports,
+  reclaiming vertical space for the proofs (tall screens are unchanged).
+- A "scroll to top" button in the controls bar.
+
+### Changed
+- Feature combinations now isolate ligature and contextual fragments: a ligature is
+  only stacked with features that genuinely restyle its OUTPUT, never with an
+  unrelated feature pulled in just because one of its characters happens to appear
+  inside the ligature (e.g. a figure feature matched by a digit inside a ligature
+  word). This removes nonsensical combinations and the all-on-all blow-up on faces
+  with many ligatures.
+- A feature whose glyphs are all produced by another feature (e.g. a stylistic set
+  restyling ligatures) now shows the real default→feature inventory of those restyled
+  glyphs on its card, alongside a pointer to Feature Combinations — instead of only a
+  pointer, and with no fabricated cross-feature word proof (so the occasional garbled
+  demo word on decorative faces is gone too).
+- Outline glyph cells (Feature Combinations, conditional / `rvrn` substitutions,
+  unreachable glyphs) now match the single-feature cards' glyph cells in size and
+  baseline: the glyph is positioned from the font's own metrics instead of rendering
+  smaller and sitting high.
+- The mark · mkmk explorer switches to a three-column layout (bases · preview ·
+  marks) on short-height viewports, and the composed-glyph preview now scales to
+  fit its box instead of overflowing on small screens.
 
 ### Fixed
 - Ligatures no longer break when a sample wraps to a new line — each word is kept
@@ -27,23 +53,7 @@ OpenType feature or UI area they affect.
   script and suppresses the ligature. Each ordinal token is shaped in isolation.
 - The `ordn` fallback template lists only the ordinal forms a font actually builds,
   instead of showing unsupported placeholders.
-- A feature whose glyphs are all produced by another feature (e.g. a stylistic set
-  restyling ligatures) no longer fabricates a misleading cross-feature proof in its
-  card — it now points to the Feature Combinations explorer. This also removes
-  occasional garbled demo words on decorative faces.
 - Demo words now render the highlighted target in its own shaping run (its feature
   on) with the surrounding text ligatures-off, so a greedy/longer ligature can't
   absorb the target and the tile shows exactly the substitution it claims (e.g. an
   `AA` ligature instead of `MA`+`AR`).
-
-## 2026-06-29
-
-### Added
-- The feature navigator moves into a right-hand side rail on short-height viewports,
-  reclaiming vertical space for the proofs (tall screens are unchanged).
-- A "scroll to top" button in the controls bar.
-
-### Changed
-- The mark · mkmk explorer switches to a three-column layout (bases · preview ·
-  marks) on short-height viewports, and the composed-glyph preview now scales to
-  fit its box instead of overflowing on small screens.

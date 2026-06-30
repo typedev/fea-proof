@@ -63,16 +63,10 @@ export function findCombinations(
 ): CombinationGroup[] {
   const order = new Map<string, number>()
   const featureFrags = new Map<string, Set<string>>() // tag → fragments it touches
-  const singleChars = new Map<string, Set<string>>() // tag → single-char touches
-  const allFragments = new Set<string>()
 
   const credit = (tag: string, fragment: string) => {
     if (!fragment || EXCLUDE.has(tag) || NOT_DISPLAYABLE.test(fragment)) return
-    allFragments.add(fragment)
     ;(featureFrags.get(tag) ?? featureFrags.set(tag, new Set()).get(tag)!).add(fragment)
-    if ([...fragment].length === 1) {
-      ;(singleChars.get(tag) ?? singleChars.set(tag, new Set()).get(tag)!).add(fragment)
-    }
   }
   const ensureOrder = (tag: string) => {
     if (!order.has(tag)) order.set(tag, minLookupIndex(features.find((f) => f.tag === tag) ?? features[0]))
@@ -123,17 +117,20 @@ export function findCombinations(
     }
   }
 
-  // Candidate features per fragment: features touching it directly, plus single-char
-  // features whose char appears inside a multi-char fragment.
+  // Candidate features per fragment: ONLY features that STRUCTURALLY touch it
+  // (produce/substitute it, incl. genuine cascade producers traced through the
+  // substitution graph). Deliberately NO substring-based cross-pollination: that
+  // wrongly attached figure/single-char features to ligature & contextual fragments
+  // merely because a char appeared inside them (e.g. a ligature word × a figure
+  // feature, or `0/0` × `dnom`) — pure noise the shaper couldn't filter out (the
+  // incidental char really did re-shape). A multi-glyph fragment therefore carries
+  // only its ligating feature(s) + real restylers of the ligated output, so a
+  // single-feature ligature drops out via the ≥2-feature gate below (it lives on
+  // its own feature card). Tag-agnostic — driven by lookup type, not feature tag.
   const candidates = new Map<string, Set<string>>()
   const addCand = (frag: string, tag: string) =>
     (candidates.get(frag) ?? candidates.set(frag, new Set()).get(frag)!).add(tag)
   for (const [tag, frags] of featureFrags) for (const frag of frags) addCand(frag, tag)
-  for (const [tag, chars] of singleChars) {
-    for (const frag of allFragments) {
-      if (frag.length > 1) for (const c of chars) if (frag.includes(c)) addCand(frag, tag)
-    }
-  }
 
   // Only fragments with ≥2 candidates can form a combination; cap the work.
   const fragments = [...candidates.entries()]

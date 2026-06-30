@@ -49,6 +49,11 @@ function* combosOfSize(k: number, size: number): Generator<number[]> {
  * combination, and cascades build up incrementally — so once forms saturate, deeper
  * combinations are redundant. This finds all real forms without the 2^k powerset.
  * (`maxLevel`/`hardCap` only bound pathological cases.)
+ *
+ * The result is then narrowed to forms that genuinely COMBINE (≥2 features, plus
+ * their single-feature building blocks); parallel single-feature alternates that
+ * never stack are dropped, and a fragment with no real combination returns no forms
+ * (see the filter below) — so this is a combinations view, not an all-forms dump.
  */
 export function buildFormMatrix(
   shaper: Shaper,
@@ -114,5 +119,19 @@ export function buildFormMatrix(
     .map((f) => ({ gids: f.gids, combo: f.combo, comboCount: f.count }))
     .sort((a, b) => a.combo.length - b.combo.length || sumOrder(a.combo) - sumOrder(b.combo))
 
-  return { baseline: baseline.gids, forms: list, truncated }
+  // Keep only forms that are part of a genuine MULTI-feature combination: every
+  // form needing ≥2 features, plus the single-feature forms whose feature is a
+  // building block of one of them (the combination's intermediate steps). Parallel
+  // single-feature alternates that never combine — e.g. a digit's onum / sups /
+  // sinf, or the two independent ff ligatures (liga vs dlig) — are dropped; they
+  // belong on each feature's own card, not in a *combinations* view. If nothing
+  // combines, the fragment isn't a real combination at all → no forms, and the
+  // caller drops the row.
+  const comboForms = list.filter((f) => f.combo.length >= 2)
+  const comboTags = new Set(comboForms.flatMap((f) => f.combo.map((c) => c.tag)))
+  const combinations = comboForms.length
+    ? list.filter((f) => f.combo.length >= 2 || comboTags.has(f.combo[0].tag))
+    : []
+
+  return { baseline: baseline.gids, forms: combinations, truncated }
 }
