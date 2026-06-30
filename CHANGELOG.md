@@ -10,6 +10,8 @@ OpenType feature or UI area they affect.
 
 ## [Unreleased]
 
+## 2026-06-30
+
 ### Fixed
 - The glyph-outline cells (Feature combinations and Unreachable glyphs) now render
   through HarfBuzz instead of opentype.js. This fixes two variable-font problems:
