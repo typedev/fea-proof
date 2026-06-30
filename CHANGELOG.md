@@ -24,6 +24,10 @@ OpenType feature or UI area they affect.
   separately.
 
 ### Fixed
+- Variable-font axis tags are no longer forced to uppercase. The five registered
+  axes now display lowercase as the spec intends (`wght`, `wdth`, `ital`, `opsz`,
+  `slnt`), while custom/foundry axes keep their meaningful case (e.g. `GRAD`,
+  `MONO`). Applies to the axis sliders and the conditional-substitution ranges.
 - The glyph-outline cells (Feature combinations and Unreachable glyphs) now render
   through HarfBuzz instead of opentype.js. This fixes two variable-font problems:
   composite glyphs no longer vanish to their glyph name (opentype.js produced NaN

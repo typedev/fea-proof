@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { Font } from 'opentype.js'
-import type { VariationAxis } from '../core/variations'
+import { displayAxisTag, type VariationAxis } from '../core/variations'
 import { toUserCoord, type AvarSegments } from '../core/coords'
 import type { AxisRange, RvrnGroup } from '../core/featureVariations'
 import type { OutlineFont } from '../core/shape'
@@ -160,8 +160,8 @@ function Group({
                     <span className="text-[10px] uppercase text-neutral-400 dark:text-neutral-600">and</span>
                   )}
                   <span className="rounded bg-neutral-100 px-1.5 py-0.5 dark:bg-neutral-800">
-                    <code className="font-mono uppercase text-indigo-600 dark:text-indigo-300">
-                      {c.tag || `#${c.axisIndex}`}
+                    <code className="font-mono text-indigo-600 dark:text-indigo-300">
+                      {c.tag ? displayAxisTag(c.tag) : `#${c.axisIndex}`}
                     </code>
                     <span className="ml-1.5 tabular-nums text-neutral-600 dark:text-neutral-300">
                       {userRange(c)}

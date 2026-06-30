@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { defaultCoords, type NamedInstance, type VariationAxis } from '../core/variations'
+import { defaultCoords, displayAxisTag, type NamedInstance, type VariationAxis } from '../core/variations'
 
 const CUSTOM = '__custom__'
 
@@ -91,7 +91,7 @@ export function AxisControls({
               className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400"
               title={a.name}
             >
-              <span className="font-mono text-xs uppercase text-neutral-600 dark:text-neutral-300">{a.tag}</span>
+              <span className="font-mono text-xs text-neutral-600 dark:text-neutral-300">{displayAxisTag(a.tag)}</span>
               <input
                 type="range"
                 min={a.min}

@@ -118,3 +118,17 @@ export function readVariations(font: Font, sfnt: ArrayBuffer): FontVariations | 
 export function defaultCoords(axes: VariationAxis[]): Record<string, number> {
   return Object.fromEntries(axes.map((a) => [a.tag, a.default]))
 }
+
+/** The five registered (standard) axes, whose tags are all-lowercase by spec. */
+const REGISTERED_AXES = new Set(['wght', 'wdth', 'ital', 'opsz', 'slnt'])
+
+/**
+ * Axis tag for display. Registered axes are spec'd lowercase (`wght`, `wdth`,
+ * `ital`, `opsz`, `slnt`); custom/foundry axes carry meaningful case (usually
+ * uppercase, e.g. `GRAD`, `XOPQ`) and are shown verbatim. So we must NOT blanket-
+ * uppercase: that mislabels the registered axes. (A font that wrongly stored a
+ * registered tag in caps is normalized back to lowercase.)
+ */
+export function displayAxisTag(tag: string): string {
+  return REGISTERED_AXES.has(tag.toLowerCase()) ? tag.toLowerCase() : tag
+}
