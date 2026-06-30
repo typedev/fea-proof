@@ -24,6 +24,10 @@ OpenType feature or UI area they affect.
   separately.
 
 ### Fixed
+- The font-name specimen heading no longer faux-bolds the font. It rendered the
+  loaded font at weight 600, so a face without a real semibold was synthetically
+  bolded (and slanted); it now shows at the font's natural weight with
+  `font-synthesis: none`, so single-weight and upright-only fonts display honestly.
 - Variable-font axis tags are no longer forced to uppercase. The five registered
   axes now display lowercase as the spec intends (`wght`, `wdth`, `ital`, `opsz`,
   `slnt`), while custom/foundry axes keep their meaningful case (e.g. `GRAD`,

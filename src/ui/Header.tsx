@@ -17,8 +17,19 @@ export function Header({ loaded }: { loaded: LoadedFont }) {
     <div className="rounded-2xl border border-neutral-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-900/40">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1
-          className="text-3xl font-semibold"
-          style={{ fontFamily: `"${loaded.cssFamily}", system-ui`, fontVariationSettings }}
+          // This is a SPECIMEN: the text is drawn in the loaded font itself, so we
+          // must show its true design. No `font-semibold` (it would make the browser
+          // FAUX-bold a font that lacks a real 600 weight), and font-synthesis: none
+          // so neither weight nor slant is ever synthesized — an upright-only or
+          // single-weight face renders honestly instead of being faked.
+          // https://clagnut.com/blog/2438
+          className="text-3xl"
+          style={{
+            fontFamily: `"${loaded.cssFamily}", system-ui`,
+            fontVariationSettings,
+            fontWeight: 'normal',
+            fontSynthesis: 'none',
+          }}
         >
           {loaded.familyName}
         </h1>
