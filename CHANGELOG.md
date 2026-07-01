@@ -10,6 +10,31 @@ OpenType feature or UI area they affect.
 
 ## [Unreleased]
 
+## 2026-07-01
+
+### Added
+- Glyph cells across the app are now clickable (highlighted on hover) and open a
+  detail popover showing the cell's glyphs — and any demo word — at the current
+  size, plus the full glyph id, Unicode code point(s), and glyph name for every
+  glyph involved (ligature components, the substituted/alternate glyph, or an
+  unreachable glyph). This covers the affected-glyph inventory, localized-forms
+  inventory, alternates grid, the feature-combinations matrix, and the
+  unreachable-glyphs section, replacing the inconsistent hover-only
+  code-point/name tooltips with one on-demand source of truth. The popover sizes
+  itself to its content and draws a thin baseline guide behind the glyphs, so raised
+  or lowered forms (superscripts, subscripts, numerators, denominators) can be
+  judged against the baseline.
+
+### Changed
+- Feature cards now always show the affected-glyph inventory (first cells inline,
+  the rest behind "Show all"), even when the sample phrase already contains every
+  affected glyph — so each glyph can be clicked for its details.
+- Numeric / figure features (oldstyle/lining/proportional/tabular figures,
+  numerators, denominators, fractions, slashed zero, ordinals) now also show the
+  per-glyph inventory of the figures they substitute — previously they were proofed
+  only on the numeric template. Features that are inert on the font's default figures
+  (e.g. lining figures on an already-lining font) stay template-only.
+
 ## 2026-06-30
 
 ### Added

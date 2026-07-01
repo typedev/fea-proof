@@ -3,7 +3,9 @@ import type { Font } from 'opentype.js'
 import type { CombinationGroup, FeatureToggle } from '../core/combinations'
 import type { Shaper, OutlineFont } from '../core/shape'
 import { buildFormMatrix, type FormMatrix } from '../core/matrix'
-import { GlyphOutline } from './GlyphOutline'
+import { GlyphOutline, outlineBaseline } from './GlyphOutline'
+import { useGlyphInfo, type GlyphInfo } from '../render/glyphInfoContext'
+import { gidDatum, popoverSize, useGlyphPopover, type PopoverContent } from './GlyphInfoPopover'
 
 /** Scroll the page to a feature's card by tag (matches any GSUB/GPOS card id). */
 function scrollToFeature(tag: string) {
@@ -48,6 +50,8 @@ export function CombinationMatrix({
   hasFeatureVariations?: boolean
 }) {
   const [showAll, setShowAll] = useState(false)
+  const info = useGlyphInfo()
+  const pop = useGlyphPopover()
   // Aim the shared HB outline font at the current coords before the tiles render.
   if (outline && coords) outline.setVariations(coords)
 
@@ -108,9 +112,10 @@ export function CombinationMatrix({
       </div>
       <div className="divide-y divide-neutral-200 overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 dark:divide-neutral-800 dark:border-neutral-800 dark:bg-neutral-950/50">
         {shown.map((it) => (
-          <GlyphRow key={it.frag} font={font} item={it} size={glyphSize} outline={outline} coords={coords} />
+          <GlyphRow key={it.frag} font={font} item={it} size={glyphSize} outline={outline} coords={coords} pop={pop} info={info} />
         ))}
       </div>
+      {pop.node}
       {items.length > INITIAL && (
         <button
           onClick={() => setShowAll((v) => !v)}
@@ -123,18 +128,24 @@ export function CombinationMatrix({
   )
 }
 
+type Pop = ReturnType<typeof useGlyphPopover>
+
 function GlyphRow({
   font,
   item,
   size,
   outline,
   coords,
+  pop,
+  info,
 }: {
   font: Font
   item: Item
   size: number
   outline?: OutlineFont
   coords?: Record<string, number>
+  pop: Pop
+  info: GlyphInfo | null
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [visible, setVisible] = useState(false)
@@ -168,9 +179,9 @@ function GlyphRow({
       </div>
       {visible ? (
         <div className="flex flex-wrap gap-3">
-          <FormTile font={font} gids={matrix.baseline} size={size} label="plain" outline={outline} coords={coords} />
+          <FormTile font={font} frag={item.frag} gids={matrix.baseline} size={size} label="plain" outline={outline} coords={coords} pop={pop} info={info} />
           {matrix.forms.map((form, i) => (
-            <FormTile key={i} font={font} gids={form.gids} size={size} combo={form.combo} outline={outline} coords={coords} />
+            <FormTile key={i} font={font} frag={item.frag} gids={form.gids} size={size} combo={form.combo} outline={outline} coords={coords} pop={pop} info={info} />
           ))}
         </div>
       ) : (
@@ -182,26 +193,45 @@ function GlyphRow({
 
 function FormTile({
   font,
+  frag,
   gids,
   size,
   combo,
   label,
   outline,
   coords,
+  pop,
+  info,
 }: {
   font: Font
+  frag: string
   gids: number[]
   size: number
   combo?: FeatureToggle[]
   label?: string
   outline?: OutlineFont
   coords?: Record<string, number>
+  pop: Pop
+  info: GlyphInfo | null
 }) {
   const isPlain = !!label
+  const colLabel = label ?? combo?.map((f) => f.tag).join(' + ') ?? 'form'
+  const build = (): PopoverContent => ({
+    preview: (
+      <span className="flex items-end gap-px">
+        {gids.map((g, i) => (
+          <GlyphOutline key={i} font={font} gid={g} size={popoverSize(size)} outline={outline} coords={coords} className="text-neutral-900 dark:text-neutral-100" />
+        ))}
+      </span>
+    ),
+    columns: [{ label: colLabel, glyphs: gids.map((g) => gidDatum(info, g)) }],
+    baseline: outlineBaseline(font, popoverSize(size)),
+  })
   return (
     <div className="flex flex-col items-center gap-1">
       <div
-        className="flex items-center justify-center rounded-md border border-neutral-200 bg-white px-2 py-1 dark:border-neutral-800 dark:bg-neutral-900"
+        {...pop.tileProps(`combo-${frag}-${colLabel}`, build)}
+        className="flex cursor-pointer items-center justify-center rounded-md border border-neutral-200 bg-white px-2 py-1 outline-none hover:border-neutral-300 focus-visible:ring-2 focus-visible:ring-indigo-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-700"
         style={{ minWidth: size }}
       >
         <GlyphRun font={font} gids={gids} size={size} muted={isPlain} outline={outline} coords={coords} />

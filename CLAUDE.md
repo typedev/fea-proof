@@ -119,6 +119,9 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
   - `featureVariationsContext.ts` — context with the rvrn substitution groups
     (keyed by substituted feature tag) + `applyByLookup` coords + `onApply`, so
     they render inside the substituted feature's (navigable) card.
+  - `glyphInfoContext.ts` — the opentype `Font` + inverted cmap, provided once at
+    the root so any glyph cell can resolve a gid → name + Unicode for the glyph-info
+    popover without prop-drilling the font.
 - `src/ui/` — `DropZone`, `Header`, `Controls` (sticky bar; hosts `FeatureNav`,
   `AxisControls`, publishes `--scroll-offset`), `AxisControls` (variable-font axis
   sliders + named-instance picker; collapses >4 axes, hides hidden axes),
@@ -134,7 +137,11 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
   VF-accurate, no opentype composite-NaN — shared by CombinationMatrix, OrphanGlyphs,
   rvrn groups, mark explorer),
   `MarkExplorer` (full-screen mark·mkmk explorer overlay), `ComposedGlyphs`
-  (base + marks positioned by GPOS anchors in one SVG).
+  (base + marks positioned by GPOS anchors in one SVG),
+  `GlyphInfoPopover` (click-to-open detail card shared by every glyph cell —
+  enlarged pair/run + demo word + full gid·U+·name per glyph + baseline guide;
+  exports the `useGlyphPopover` hook, `shapeData`/`gidDatum` resolvers, and
+  `popoverSize` — see the "Glyph-info popover" gotcha).
 - `src/App.tsx` — state + layout (incl. axis `coords`, the variable/rvrn/mark
   contexts, the mark-explorer overlay state, and an isolated `outlineFont` —
   `loadOutlineFont` kept at `coords` — fed to the outline cells).
@@ -278,6 +285,31 @@ Managed with `uv`; add packages via `uv pip install --python .venv/bin/python <p
   `GlyphOutline`'s `fit` mode renders a glyph at em-proportion from its bbox
   (marks have ~0 advance and would otherwise clip). Scrollbars are theme-colored
   app-wide in `src/index.css`.
+- **Glyph-info popover (every glyph cell is clickable).** `GlyphInfoPopover` is one
+  portal card opened by clicking any glyph tile (whole tile is the target, hover-
+  highlighted — no marker). It's data-driven: callers build a `{preview, word?,
+  columns, baseline?}` via the `useGlyphPopover()` hook's `tileProps(key, build)`,
+  and the card renders the preview enlarged (`popoverSize(size)` = size × 1.4, tied
+  to the Size regulator), the demo word at the same size, and one `gid · U+ · name`
+  column per side. Glyph facts come from `glyphInfoContext` (font + reverse cmap):
+  text cells resolve output gids by shaping (`shapeData` with feature/lang variant);
+  outline cells pass gids directly (`gidDatum`). Width is content-sized
+  (`w-max/min/max`). The baseline guide: `baseline: true` measures the CSS-text
+  baseline via a zero-height inline-block probe; outline previews pass an explicit y
+  (`outlineBaseline(font, size)` from `GlyphOutline`, since an SVG box has no text
+  baseline). This REPLACED the old inconsistent `title=` code-point tooltips — don't
+  reintroduce them.
+- **Affected-glyph cells show for figure/numeric features too.** `FeatureCard`
+  always renders the affected-glyph inventory when `sample.affected` is non-empty
+  (first `GLYPH_INVENTORY_THRESHOLD`, rest behind "Show all"), even when the sample
+  phrase already covers every glyph — the cells exist so each can be inspected via
+  the popover. For the figure-template features (`samples/index.ts` FIGURE_TEMPLATES:
+  lnum/onum/pnum/tnum/zero/numr/dnom/frac/afrc/ordn) `affected` is populated from the
+  type-1 input chars, and — when a feature has none (it substitutes via
+  ligature/contextual lookups, e.g. a type-4 `frac` or `ordn`) — from the template's
+  multi-char tokens that actually change under the isolated toggle (shape-diffed), so
+  `1/2`→½ and `No.`→№ still get cells. Inert figure features (no change on the font's
+  default figures) stay `affected: []` (template-only, with the "no effect" note).
 - **Outline cells render via HarfBuzz, not opentype.js.** Two sections draw glyphs
   as outlines by gid because the glyphs have no codepoint to type as text:
   combinations (output gids of shaping) and unreachable (no cmap). Every OTHER cell
@@ -384,4 +416,8 @@ composition + validity gating + variable-font-accurate outlines & anchors);
 forms labelled with the minimal producing set); **HarfBuzz outline cells**
 (combinations / unreachable / rvrn groups render glyphs via `loadOutlineFont` —
 VF-accurate, fixes opentype.js's composite-glyph NaN; combinations re-shape at the
-current coordinate so rvrn participates).
+current coordinate so rvrn participates); **glyph-info popover** (every glyph cell
+clickable → enlarged pair/run + demo word + gid·U+·name + baseline guide;
+`GlyphInfoPopover` + `glyphInfoContext`; figure/numeric features now show their
+substituted-glyph inventory too, incl. type-4/6 `frac`/`ordn` via template-token
+shape-diff).

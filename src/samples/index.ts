@@ -543,11 +543,25 @@ export async function prepareSamples(
         !!shaper &&
         shaper.shape(template, { features: before }).map((g) => g.g).join() ===
           shaper.shape(template, { features: after }).map((g) => g.g).join()
+      // Per-glyph inventory for the figures this feature actually substitutes.
+      // First the type-1 input chars (digits for lnum/onum/pnum/tnum/zero/numr/dnom,
+      // ª/º for a type-1 ordn). When there are none — the feature substitutes via
+      // ligature/contextual lookups instead (frac's "1/2"→½, ordn's "1a"→1ª /
+      // "No."→№) — fall back to the template's multi-char tokens that actually change
+      // under the isolated toggle, so those substitutions still get clickable cells.
+      // Skipped when inert (an identical pair per item would be pure noise).
+      let figChars = inert ? [] : affectedInputChars(font, feature, reverse)
+      if (figChars.length === 0 && shaper && !inert) {
+        const key = (tok: string, feats: string[]) => shaper.shape(tok, { features: feats }).map((g) => g.g).join()
+        figChars = [...new Set(template.split(/\s+/))].filter(
+          (tok) => tok.length > 1 && key(tok, before) !== key(tok, after),
+        )
+      }
       pending.push({
         tag: feature.tag,
         kind: 'single',
         text: template,
-        affected: [],
+        affected: figChars,
         before,
         after,
         settings: figureBeforeAfter(feature.tag),

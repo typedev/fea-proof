@@ -11,8 +11,8 @@ import { FeatureVariationsGroups } from './FeatureVariationsGroups'
 import { useFeatureVariations } from '../render/featureVariationsContext'
 import { ligatureBeforeAfter, isFigureLikeFeature, isCaseFeature } from '../render/featureSettings'
 
-// Above this many affected glyphs the word sample can't show them all, so offer
-// the full inventory.
+// How many affected-glyph cells to show inline; beyond this the rest collapse
+// behind a "Show all" toggle.
 const GLYPH_INVENTORY_THRESHOLD = 12
 
 /** DOM id for a feature card, used as a scroll anchor by the feature navigator. */
@@ -123,7 +123,7 @@ export function FeatureCard({
         </div>
       ) : sample.kind === 'alternates' ? (
         <div className="mt-3">
-          <AltGrid cssFamily={cssFamily} tag={feature.tag} alternates={sample.alternates} size={size} />
+          <AltGrid cssFamily={cssFamily} tag={feature.tag} alternates={sample.alternates} size={size} shaper={shaper} />
         </div>
       ) : (
         <div className="mt-3 space-y-3">
@@ -194,26 +194,30 @@ export function FeatureCard({
               {sample.note && (
                 <div className="mt-1.5 text-[11px] text-neutral-400 dark:text-neutral-600">{sample.note}</div>
               )}
-              {sample.affected.length > GLYPH_INVENTORY_THRESHOLD && (
+              {sample.affected.length > 0 && (
                 <>
-                  <button
-                    onClick={() => setShowAll((v) => !v)}
-                    className="mt-2 text-xs text-indigo-600 hover:underline dark:text-indigo-400"
-                  >
-                    {showAll ? 'Hide' : `Show all ${sample.affected.length} affected glyphs`}
-                  </button>
-                  {showAll && (
-                    <AffectedGlyphs
-                      cssFamily={cssFamily}
-                      tag={feature.tag}
-                      defaultOn={feature.defaultOn}
-                      affected={sample.affected}
-                      size={size}
-                      isLigature={sample.kind === 'ligature'}
-                      settings={sample.settings}
-                      shaper={shaper}
-                      spotlight={!isFigureLikeFeature(feature.tag) && !isCaseFeature(feature.tag)}
-                    />
+                  {/* Always show the affected-glyph inventory (first N inline, the rest
+                      behind "Show all") — even when the word sample already contains
+                      every glyph, the cells let you click into each for its gid /
+                      Unicode / name via the popover. */}
+                  <AffectedGlyphs
+                    cssFamily={cssFamily}
+                    tag={feature.tag}
+                    defaultOn={feature.defaultOn}
+                    affected={showAll ? sample.affected : sample.affected.slice(0, GLYPH_INVENTORY_THRESHOLD)}
+                    size={size}
+                    isLigature={sample.kind === 'ligature'}
+                    settings={sample.settings}
+                    shaper={shaper}
+                    spotlight={!isFigureLikeFeature(feature.tag) && !isCaseFeature(feature.tag)}
+                  />
+                  {sample.affected.length > GLYPH_INVENTORY_THRESHOLD && (
+                    <button
+                      onClick={() => setShowAll((v) => !v)}
+                      className="mt-2 text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+                    >
+                      {showAll ? 'Show fewer' : `Show all ${sample.affected.length} affected glyphs`}
+                    </button>
                   )}
                 </>
               )}

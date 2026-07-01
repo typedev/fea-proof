@@ -5,6 +5,9 @@ import { inlineSamples, type InlineSample } from '../samples/spotlight'
 import { highlightRanges } from '../render/highlight'
 import { useVariationSettings } from '../render/variationContext'
 import { useSupportedCodepoints } from '../render/supportedCodepointsContext'
+import { useGlyphInfo } from '../render/glyphInfoContext'
+import { popoverSize, shapeData, useGlyphPopover, type PopoverContent } from './GlyphInfoPopover'
+import { cssToHbFeatures } from '../samples/spotlight'
 import type { Shaper } from '../core/shape'
 
 const SCRIPT_LABELS: Record<string, string> = {
@@ -66,8 +69,13 @@ export function AffectedGlyphs({
 
   const fontVariationSettings = useVariationSettings()
   const supportedCps = useSupportedCodepoints()
+  const info = useGlyphInfo()
+  const pop = useGlyphPopover()
   const offStyle: CSSProperties = { fontFamily: family, fontFeatureSettings: before, fontSize: glyphSize, fontVariationSettings }
   const onStyle: CSSProperties = { fontFamily: family, fontFeatureSettings: after, fontSize: glyphSize, fontVariationSettings }
+  // Popover preview renders larger than the size regulator (uncapped, unlike the tiles).
+  const bigOff: CSSProperties = { ...offStyle, fontSize: popoverSize(size) }
+  const bigOn: CSSProperties = { ...onStyle, fontSize: popoverSize(size) }
 
   // Lazily pick a demo word per affected item once the grid is shown.
   const [words, setWords] = useState<Map<string, InlineSample | null> | null>(null)
@@ -98,11 +106,35 @@ export function AffectedGlyphs({
           <div className="flex flex-wrap gap-1.5">
             {groups.get(key)!.map((item, i) => {
               const sample = words?.get(item)
+              const tileKey = `${key}-${item}-${i}`
+              const build = (): PopoverContent => ({
+                preview: (
+                  <>
+                    <span style={bigOff} className="leading-none text-neutral-400 dark:text-neutral-600">
+                      {item}
+                    </span>
+                    <span className="text-sm text-neutral-400 dark:text-neutral-600">→</span>
+                    <span style={bigOn} className="leading-none text-neutral-900 dark:text-neutral-100">
+                      {item}
+                    </span>
+                  </>
+                ),
+                word: sample ? (
+                  <span style={bigOn} className="text-neutral-700 dark:text-neutral-300">
+                    {highlightRanges(sample.text, sample.ranges, false, { plain: LIGATURES_OFF, target: after })}
+                  </span>
+                ) : undefined,
+                columns: [
+                  { label: 'default', glyphs: shapeData(shaper, info, item, { features: cssToHbFeatures(before) }) },
+                  { label: 'feature on', glyphs: shapeData(shaper, info, item, { features: cssToHbFeatures(after) }) },
+                ],
+                baseline: true,
+              })
               return (
                 <div
                   key={`${item}-${i}`}
-                  className="flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-2 py-1 dark:border-neutral-800 dark:bg-neutral-900"
-                  title={codepoints(item)}
+                  {...pop.tileProps(tileKey, build)}
+                  className="flex cursor-pointer items-center gap-2 rounded-md border border-neutral-200 bg-white px-2 py-1 outline-none hover:border-neutral-300 focus-visible:ring-2 focus-visible:ring-indigo-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-700"
                 >
                   <span className="flex items-center gap-1">
                     <span style={offStyle} className="text-neutral-400 dark:text-neutral-600">
@@ -127,6 +159,7 @@ export function AffectedGlyphs({
           </div>
         </div>
       ))}
+      {pop.node}
     </div>
   )
 }

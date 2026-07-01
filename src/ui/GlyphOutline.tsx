@@ -3,6 +3,19 @@ import type { Font } from 'opentype.js'
 import type { OutlineFont } from '../core/shape'
 
 /**
+ * Baseline y (px from the top of a NON-FIT GlyphOutline box) for a given size —
+ * the same value the component uses internally to place the glyph. Lets callers
+ * draw a baseline guide aligned to outline glyphs (which have no CSS text baseline).
+ */
+export function outlineBaseline(font: Font, size: number): number {
+  const upm = font.unitsPerEm || 1000
+  const ascPx = ((font.ascender || upm * 0.8) / upm) * size
+  const descPx = -(font.descender || -upm * 0.2) / upm * size
+  const lineBox = size * 1.5
+  return (lineBox - (ascPx + descPx)) / 2 + ascPx
+}
+
+/**
  * Render a glyph by its id straight from the font outline (not as text). Needed
  * for glyphs that have no Unicode mapping — e.g. variant glyphs produced by
  * rvrn (`a.italic`, `l.sans`) or the unreachable-glyph inventory.
@@ -105,10 +118,8 @@ export function GlyphOutline({
   // drops into a cell at the same size AND baseline as a text glyph, matching the
   // single-feature cards (AffectedGlyphs). (`fit` mode above stays bbox-tight for
   // marks/variants that have ~0 advance.)
-  const ascPx = ((font.ascender || upm * 0.8) / upm) * size
-  const descPx = (-(font.descender || -upm * 0.2) / upm) * size // positive
   const lineBox = size * 1.5
-  const baseline = (lineBox - (ascPx + descPx)) / 2 + ascPx
+  const baseline = outlineBaseline(font, size)
   const adv = ((glyph?.advanceWidth ?? upm) / upm) * size
 
   if (hb) {

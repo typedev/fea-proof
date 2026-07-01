@@ -25,6 +25,7 @@ import { useMediaQuery } from './ui/useMediaQuery'
 import type { FeatureInfo } from './core/types'
 import { FeatureVariationsContext, type FeatureVariationsData } from './render/featureVariationsContext'
 import { SupportedCodepointsContext } from './render/supportedCodepointsContext'
+import { GlyphInfoContext } from './render/glyphInfoContext'
 
 type Theme = 'light' | 'dark'
 
@@ -124,6 +125,8 @@ function Loaded({
   railMode: boolean
 }) {
   const features = useMemo(() => analyzeFeatures(loaded.font, loaded.sfnt), [loaded])
+  // Font + inverted cmap for the glyph-info popover (gid + U+ + name lookups).
+  const glyphInfo = useMemo(() => ({ font: loaded.font, reverseCmap: buildReverseCmap(loaded.font) }), [loaded])
   const orphans = useMemo(
     () => findOrphanGlyphs(loaded.font, buildReverseCmap(loaded.font), features).orphans,
     [loaded, features],
@@ -292,6 +295,7 @@ function Loaded({
     <VariationSettingsContext.Provider value={varSettings}>
       <FeatureVariationsContext.Provider value={featureVariationsValue}>
       <SupportedCodepointsContext.Provider value={loaded.supportedCodepoints}>
+      <GlyphInfoContext.Provider value={glyphInfo}>
       {railMode ? (
         <div className="flex items-start gap-6">
           {column}
@@ -311,6 +315,7 @@ function Loaded({
           onClose={() => setMarkExplorer(null)}
         />
       )}
+      </GlyphInfoContext.Provider>
       </SupportedCodepointsContext.Provider>
       </FeatureVariationsContext.Provider>
     </VariationSettingsContext.Provider>

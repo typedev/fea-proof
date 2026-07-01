@@ -5,7 +5,8 @@ import { inlineSamples, type InlineSample } from '../samples/spotlight'
 import { highlightRanges } from './highlight'
 import { useVariationSettings } from './variationContext'
 import { useSupportedCodepoints } from './supportedCodepointsContext'
-import { codepoints } from '../ui/AffectedGlyphs'
+import { useGlyphInfo } from './glyphInfoContext'
+import { popoverSize, shapeData, useGlyphPopover, type PopoverContent } from '../ui/GlyphInfoPopover'
 
 // Above this many localized forms, collapse the inventory behind a toggle.
 const INVENTORY_THRESHOLD = 12
@@ -124,6 +125,11 @@ function Inventory({
   const on: CSSProperties = { ...localized, fontFamily: `"${cssFamily}", system-ui`, fontSize: glyphSize }
 
   const supportedCps = useSupportedCodepoints()
+  const info = useGlyphInfo()
+  const pop = useGlyphPopover()
+  // Popover preview renders larger than the size regulator (uncapped, unlike the tiles).
+  const bigOff: CSSProperties = { ...off, fontSize: popoverSize(size) }
+  const bigOn: CSSProperties = { ...on, fontSize: popoverSize(size) }
   const [words, setWords] = useState<Map<string, InlineSample | null> | null>(null)
   useEffect(() => {
     let cancelled = false
@@ -136,15 +142,39 @@ function Inventory({
     }
   }, [l.affected, l.bcp47, shaper, supportedCps])
 
+  const lclLang = l.bcp47 ?? 'en'
   return (
     <div className="flex flex-wrap gap-1.5">
       {l.affected.map((ch, i) => {
         const sample = words?.get(ch)
+        const build = (): PopoverContent => ({
+          preview: (
+            <>
+              <span style={bigOff} className="leading-none text-neutral-400 dark:text-neutral-600">
+                {ch}
+              </span>
+              <span className="text-sm text-neutral-400 dark:text-neutral-600">→</span>
+              <span style={bigOn} lang={l.bcp47} className="leading-none text-neutral-900 dark:text-neutral-100">
+                {ch}
+              </span>
+            </>
+          ),
+          word: sample ? (
+            <span style={bigOn} lang={l.bcp47} className="text-neutral-700 dark:text-neutral-300">
+              {highlightRanges(sample.text, sample.ranges)}
+            </span>
+          ) : undefined,
+          columns: [
+            { label: 'default', glyphs: shapeData(shaper, info, ch, { language: 'en' }) },
+            { label: l.name, glyphs: shapeData(shaper, info, ch, { language: lclLang }) },
+          ],
+          baseline: true,
+        })
         return (
           <div
             key={`${ch}-${i}`}
-            className="flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-2 py-1 dark:border-neutral-800 dark:bg-neutral-900"
-            title={codepoints(ch)}
+            {...pop.tileProps(`${l.otTag}-${ch}-${i}`, build)}
+            className="flex cursor-pointer items-center gap-2 rounded-md border border-neutral-200 bg-white px-2 py-1 outline-none hover:border-neutral-300 focus-visible:ring-2 focus-visible:ring-indigo-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-700"
           >
             <span className="flex items-center gap-1">
               <span style={off} className="text-neutral-400 dark:text-neutral-600">
@@ -167,6 +197,7 @@ function Inventory({
           </div>
         )
       })}
+      {pop.node}
     </div>
   )
 }
