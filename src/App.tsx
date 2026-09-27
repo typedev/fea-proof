@@ -166,9 +166,9 @@ function Loaded({
   const features = useMemo(() => analyzeFeatures(loaded.font, loaded.sfnt), [loaded])
   // Font + inverted cmap for the glyph-info popover (gid + U+ + name lookups).
   const glyphInfo = useMemo(() => ({ font: loaded.font, reverseCmap: buildReverseCmap(loaded.font) }), [loaded])
-  const orphans = useMemo(
-    () => findOrphanGlyphs(loaded.font, buildReverseCmap(loaded.font), features).orphans,
-    [loaded, features],
+  const { orphans, puaOnly } = useMemo(
+    () => findOrphanGlyphs(loaded.font, glyphInfo.reverseCmap, features),
+    [loaded, features, glyphInfo],
   )
   const [samples, setSamples] = useState<Map<string, FeatureSample>>(new Map())
   const [combinations, setCombinations] = useState<CombinationGroup[]>([])
@@ -288,6 +288,7 @@ function Loaded({
       features={features}
       hasCombinations={combinations.length > 0}
       hasOrphans={orphans.length > 0}
+      hasPuaOnly={puaOnly.length > 0}
       axes={variations?.axes ?? []}
       instances={variations?.instances ?? []}
       coords={coords}
@@ -326,7 +327,22 @@ function Loaded({
         coords={coords}
         hasFeatureVariations={!!featureVariations}
       />
-      <OrphanGlyphs font={loaded.font} gids={orphans} size={size} outline={outlineFont} coords={coords} />
+      <OrphanGlyphs
+        kind="pua"
+        font={loaded.font}
+        gids={puaOnly}
+        size={size}
+        outline={outlineFont}
+        coords={coords}
+      />
+      <OrphanGlyphs
+        kind="unreachable"
+        font={loaded.font}
+        gids={orphans}
+        size={size}
+        outline={outlineFont}
+        coords={coords}
+      />
     </div>
   )
 

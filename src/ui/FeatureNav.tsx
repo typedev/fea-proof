@@ -13,11 +13,13 @@ export function FeatureNav({
   features,
   hasCombinations,
   hasOrphans,
+  hasPuaOnly,
   railMode = false,
 }: {
   features: FeatureInfo[]
   hasCombinations: boolean
   hasOrphans: boolean
+  hasPuaOnly: boolean
   /** In the side rail the list may grow tall; otherwise it's capped + scrolls. */
   railMode?: boolean
 }) {
@@ -48,6 +50,15 @@ export function FeatureNav({
             className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
           >
             combinations
+          </button>
+        )}
+        {hasPuaOnly && (
+          <button
+            onClick={() => jump('pua-only-glyphs')}
+            title="Glyphs reachable only via Private Use Area code points"
+            className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-900/40"
+          >
+            PUA only
           </button>
         )}
         {hasOrphans && (

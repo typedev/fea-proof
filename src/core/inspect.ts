@@ -78,6 +78,12 @@ function collectLookupGlyphs(lookup: Lookup, out: Set<number>) {
 export interface OrphanReport {
   /** Glyph ids with no Unicode that no feature (besides kern/mark/mkmk) touches. */
   orphans: number[]
+  /**
+   * Glyph ids whose ONLY Unicode mappings are Private Use Area code points and
+   * that no feature (besides kern/mark/mkmk) touches — typeable only if you know
+   * the PUA code point, so otherwise just as hidden as the orphans.
+   */
+  puaOnly: number[]
   total: number
 }
 
@@ -87,6 +93,10 @@ export interface OrphanReport {
  * feature. Such glyphs can't be typed or produced by any feature toggle, so the
  * user would otherwise never know they exist.
  */
+/** Private Use Area: the BMP block plus supplementary planes 15–16. */
+export const isPua = (cp: number) =>
+  (cp >= 0xe000 && cp <= 0xf8ff) || (cp >= 0xf0000 && cp <= 0xffffd) || (cp >= 0x100000 && cp <= 0x10fffd)
+
 export function findOrphanGlyphs(
   font: Font,
   reverse: Map<number, number[]>,
@@ -112,10 +122,13 @@ export function findOrphanGlyphs(
 
   const total = font.glyphs.length
   const orphans: number[] = []
+  const puaOnly: number[] = []
   for (let gid = 1; gid < total; gid++) {
     // gid 0 = .notdef, always present by spec.
-    if (reverse.has(gid) || referenced.has(gid)) continue
-    orphans.push(gid)
+    if (referenced.has(gid)) continue
+    const cps = reverse.get(gid)
+    if (!cps) orphans.push(gid)
+    else if (cps.every(isPua)) puaOnly.push(gid)
   }
-  return { orphans, total }
+  return { orphans, puaOnly, total }
 }

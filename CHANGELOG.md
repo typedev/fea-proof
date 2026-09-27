@@ -10,6 +10,11 @@ OpenType feature or UI area they affect.
 
 ## [Unreleased]
 
+### Added
+- New "Glyphs reachable only via PUA" section (above "Unreachable glyphs", with a
+  "PUA only" jump button): glyphs whose only Unicode mappings are Private Use Area
+  code points and that no feature produces. Each tile shows its PUA code point.
+
 ### Changed
 - The light/dark theme now follows the system setting (and switches live when it
   changes). Using the toggle overrides it and is remembered; toggling back to the

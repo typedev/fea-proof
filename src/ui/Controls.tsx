@@ -12,6 +12,7 @@ export function Controls({
   features,
   hasCombinations,
   hasOrphans,
+  hasPuaOnly,
   axes,
   instances,
   coords,
@@ -25,6 +26,7 @@ export function Controls({
   features: FeatureInfo[]
   hasCombinations: boolean
   hasOrphans: boolean
+  hasPuaOnly: boolean
   axes: VariationAxis[]
   instances: NamedInstance[]
   coords: Record<string, number>
@@ -103,6 +105,7 @@ export function Controls({
         features={features}
         hasCombinations={hasCombinations}
         hasOrphans={hasOrphans}
+        hasPuaOnly={hasPuaOnly}
         railMode={railMode}
       />
     </div>
