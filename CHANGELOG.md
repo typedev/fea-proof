@@ -10,6 +10,11 @@ OpenType feature or UI area they affect.
 
 ## [Unreleased]
 
+### Changed
+- The light/dark theme now follows the system setting (and switches live when it
+  changes). Using the toggle overrides it and is remembered; toggling back to the
+  system's theme resumes following it.
+
 ## 2026-07-01
 
 ### Added

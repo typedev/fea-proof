@@ -29,11 +29,45 @@ import { GlyphInfoContext } from './render/glyphInfoContext'
 
 type Theme = 'light' | 'dark'
 
+// The theme follows the OS `prefers-color-scheme` (live) unless the user has
+// picked one with the toggle; that explicit choice is remembered per browser.
+// Toggling back to the system's current theme clears it, resuming the follow.
+const THEME_KEY = 'fea-proof:theme'
+const darkQuery = () => window.matchMedia('(prefers-color-scheme: dark)')
+const systemTheme = (): Theme => (darkQuery().matches ? 'dark' : 'light')
+
+function readStoredTheme(): Theme | null {
+  try {
+    const v = localStorage.getItem(THEME_KEY)
+    return v === 'light' || v === 'dark' ? v : null
+  } catch {
+    return null
+  }
+}
+
+function storeTheme(theme: Theme | null) {
+  try {
+    if (theme) localStorage.setItem(THEME_KEY, theme)
+    else localStorage.removeItem(THEME_KEY)
+  } catch {
+    // storage unavailable (private mode etc.) — the choice just isn't remembered
+  }
+}
+
 export function App() {
   const [loaded, setLoaded] = useState<LoadedFont | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [theme, setTheme] = useState<Theme>('dark')
+  const [override, setOverride] = useState<Theme | null>(readStoredTheme)
+  const [system, setSystem] = useState<Theme>(systemTheme)
+  const theme = override ?? system
+
+  useEffect(() => {
+    const mq = darkQuery()
+    const onChange = () => setSystem(mq.matches ? 'dark' : 'light')
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -53,7 +87,12 @@ export function App() {
     }
   }, [])
 
-  const toggleTheme = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), [])
+  const toggleTheme = useCallback(() => {
+    const next: Theme = theme === 'dark' ? 'light' : 'dark'
+    const choice = next === system ? null : next
+    setOverride(choice)
+    storeTheme(choice)
+  }, [theme, system])
 
   // On viewports short by height (with room to spare horizontally) the feature
   // navigator moves from a sticky top bar into a right-hand side rail, reclaiming
