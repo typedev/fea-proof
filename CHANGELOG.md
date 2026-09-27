@@ -10,6 +10,8 @@ OpenType feature or UI area they affect.
 
 ## [Unreleased]
 
+## 2026-09-27
+
 ### Added
 - New "Glyphs reachable only via PUA" section (above "Unreachable glyphs", with a
   "PUA only" jump button): glyphs whose only Unicode mappings are Private Use Area
