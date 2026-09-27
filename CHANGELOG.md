@@ -14,6 +14,8 @@ OpenType feature or UI area they affect.
 - The light/dark theme now follows the system setting (and switches live when it
   changes). Using the toggle overrides it and is remembered; toggling back to the
   system's theme resumes following it.
+- Feature-combination rows are now listed in the font's glyph order instead of
+  being grouped by feature set.
 
 ## 2026-07-01
 

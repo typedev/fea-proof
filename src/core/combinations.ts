@@ -32,6 +32,26 @@ const NOT_DISPLAYABLE = /[\p{M}\p{Cf}\p{Cc}\s]/u
 const MAX_FRAGMENTS_PER_GROUP = 24
 const MAX_FRAGMENTS = 700
 
+/**
+ * Compare two text fragments by the font's glyph order: the gids of their chars
+ * (via cmap), lexicographically — so a fragment sorts right after its first
+ * glyph, and a designer sees the combinations in the order of their glyph set.
+ */
+export function glyphOrderComparator(font: Font): (a: string, b: string) => number {
+  const cache = new Map<string, number[]>()
+  const gids = (frag: string) => {
+    let g = cache.get(frag)
+    if (!g) cache.set(frag, (g = [...frag].map((ch) => font.charToGlyphIndex(ch))))
+    return g
+  }
+  return (a, b) => {
+    const ga = gids(a)
+    const gb = gids(b)
+    for (let i = 0; i < Math.min(ga.length, gb.length); i++) if (ga[i] !== gb[i]) return ga[i] - gb[i]
+    return ga.length - gb.length
+  }
+}
+
 function minLookupIndex(feature: FeatureInfo): number {
   let min = Infinity
   for (const occ of feature.occurrences) {
@@ -169,10 +189,9 @@ export function findCombinations(
     group.chars.push(frag)
   }
 
+  const byGlyphOrder = glyphOrderComparator(font)
   const result: CombinationGroup[] = [...groups.values()].map((g) => ({
-    chars: g.chars
-      .sort((a, b) => a.length - b.length || a.codePointAt(0)! - b.codePointAt(0)!)
-      .slice(0, MAX_FRAGMENTS_PER_GROUP),
+    chars: g.chars.sort(byGlyphOrder).slice(0, MAX_FRAGMENTS_PER_GROUP),
     features: g.tags
       .map((tag) => ({ tag, name: featureName(tag), defaultOn: isDefaultOn(tag), order: order.get(tag) ?? 0 }))
       .sort((a, b) => a.order - b.order),

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Font } from 'opentype.js'
-import type { CombinationGroup, FeatureToggle } from '../core/combinations'
+import { glyphOrderComparator, type CombinationGroup, type FeatureToggle } from '../core/combinations'
 import type { Shaper, OutlineFont } from '../core/shape'
 import { buildFormMatrix, type FormMatrix } from '../core/matrix'
 import { GlyphOutline, outlineBaseline } from './GlyphOutline'
@@ -85,9 +85,11 @@ export function CombinationMatrix({
         out.push({ frag, features: g.features, matrix })
       }
     }
-    return out
+    // Rows follow the font's glyph order (not feature-set grouping / lookup order).
+    const byGlyphOrder = glyphOrderComparator(font)
+    return out.sort((a, b) => byGlyphOrder(a.frag, b.frag))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groups, shaper, shapeKey])
+  }, [groups, shaper, shapeKey, font])
 
   if (!shaper || items.length === 0) return null
 
